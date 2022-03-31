@@ -35,6 +35,16 @@ def popup_window(texto, sair):
     button_close.pack(fill='y', pady=20) 
     return window
 
+
+#def log_window(texto):
+#    
+#    window = tkinter.Toplevel()
+#    label = tkinter.Label(window, font=global_settings.Font_tuple_Arial_10, text=texto, image=global_settings.warningimage, compound='top')
+##    label.pack(fill='x', padx=50, pady=20)
+#    button_close = tkinter.Button(window, font=global_settings.Font_tuple_Arial_10, text="OK", command= lambda : popupcomandook(sair, window))
+#    button_close.pack(fill='y', pady=20) 
+#    return window
+
 def popupcomandook(sair, window):
     
     if(sair):
@@ -56,10 +66,9 @@ def extract_links_from_page(doc, idpdf, idobs, pathpdf, paginainit, paginafim, p
     p1x = round(p1x)
     p0y = round(p0y)
     p1y = round(p1y)
-    
     links_tratados = []
     for p in range(paginainit, paginafim+1):
-        if(paginainit!=paginafim):
+        if(paginainit!=paginafim and False):
             #print('dif')
             if(p==paginainit):
                 p1y = global_settings.infoLaudo[pathpdf].mb
@@ -71,13 +80,16 @@ def extract_links_from_page(doc, idpdf, idobs, pathpdf, paginainit, paginafim, p
             if(p0y==p1y):
                 p0y -= 1
                 p1y += 1
+        #rint('2', p0x, p0y, p1x, p1y)
         loadedpage_links = doc[p].get_links()
+        #print(loadedpage_links)
         for link in loadedpage_links:
             #print(link)
             r = link['from']
             rymedio = math.ceil((math.ceil(r.y1) + math.ceil(r.y0))/2.0)
             link_tratado = None
-            if(p0y <= rymedio and p1y >= rymedio):
+            if((paginainit==paginafim and p0y <= rymedio and p1y >= rymedio) or (p==paginainit and p0y <= rymedio) or (p==paginafim and p1y >= rymedio) \
+               or (p!=paginainit and p!=paginafim)):
                 
                 if('file' in link):
                     link_tratado = link['file']
@@ -94,7 +106,7 @@ def extract_links_from_page(doc, idpdf, idobs, pathpdf, paginainit, paginafim, p
                     #if(link['uri'] not in dict_of_anottations):
                     #    dict_of_anottations[link['uri']] = []
                     #dict_of_anottations[link['uri']].append((r.x0, r.y0, r.x1, r.y1, ''))
-            #print(link_tratado, rymedio, p0y, p1y)
+        
             if(link_tratado!=None):        
                 
                 links_tratados.append((idpdf, idobs, paginainit, math.ceil(r.x0), \
@@ -168,13 +180,23 @@ def popup_window(texto, sair, imagepcp=None):
     return windowpopup
 
 def printlogexception(printorlog='print', ex=None):
+    
+    #if(global_settings.log_window==None):
+    try:
+        global_settings.log_window_text.insert('end', traceback.format_exc())
+        global_settings.log_window_text.insert('end',"\n")
+        global_settings.label_warning_error.config(bg='red')
+    except:
+        None
+    
     if(printorlog=='log'):
         global_settings.logging.exception('!')
     elif(printorlog=='print'):
         exc_type, exc_value, exc_tb = sys.exc_info()
         traceback.print_exception(exc_type, exc_value, exc_tb)
-    else:
-        None   
+    
+    #else:
+    #    None   
 def get_application_path():
     application_path = None
     if getattr(sys, 'frozen', False):
@@ -206,6 +228,8 @@ def concatVertical(images):
         return dst
     else:
         return None
+    
+
     
 def create_rectanglex(x1, y1, x2, y2, color, link=False, withborder=True, transparent=False, **kwargs):
     try:
@@ -240,7 +264,15 @@ def create_rectanglex(x1, y1, x2, y2, color, link=False, withborder=True, transp
     except Exception as ex:
         None
 
-
+def insertIndex(tree, parent, texto_candidato, index=0):
+    children = tree.get_children(parent)
+    
+    for child in children:
+        texto = tree.item(child, 'text')
+        if(texto_candidato < texto):
+            break
+        index += 1
+    return index 
 
 def countChildren(treeview, treenode, putcount=True):    
     th = 0           
@@ -260,7 +292,10 @@ def countChildren(treeview, treenode, putcount=True):
         else:
             if(putcount):
                 textoother = treeview.item(treenode, 'text')
-                treeview.item(treenode, text=textoother + ' (' + str(th) + ')')              
+                treeview.item(treenode, text=textoother + ' (' + str(th) + ')')  
+            if(treeview.tag_has("relsearch",treenode)):
+                valores = treeview.item(treenode, 'values')
+                treeview.item(treenode, values=(valores[0], valores[1], th, textoother,))
     return th
 
 def locateToc(pagina, pdf, p0y=None, init=None, tocpdf=None):
@@ -278,7 +313,7 @@ def locateToc(pagina, pdf, p0y=None, init=None, tocpdf=None):
                 elif(pagina >= tocpdf[t][1] and pagina <= tocpdf[t+1][1]):
                     napagina = True
                     
-                if(napagina and tocpdf[t+1][3] > init  ):  
+                if(napagina and tocpdf[t+1][3] > init):  
                     naoachou = False
                     break
             
@@ -308,10 +343,13 @@ def locateToc(pagina, pdf, p0y=None, init=None, tocpdf=None):
         
         t = min(t, len(tocpdf)-1)
         t = max(0, t)
+        tocc=[pdf,'','']
         if(len(tocpdf) > 0 and len(tocpdf[t])>0):
-            tocc = tocpdf[t][0]
-        else:
-            tocc=""
+            tocc = tocpdf[t]
+        #print(tocc)
+        #else:
+        ##    print('teste')
+        #    tocc=[pdf,'','']
         return tocc
   
 def iterateXREF_Names(doc, xref, abs_path_pdf, pismm, aprocurar, rereference, rename_dest, regex):
@@ -478,6 +516,10 @@ def extract_text_from_page(doc, pagina, deslocy, topmargin, bottommargin, leftma
     dictx = doc[pagina].get_text("rawdict", flags=flags)  
     novotexto = ''
     init = 0
+    x0 = -1
+    y0 = -1
+    x1 = -1
+    y1 = -1
     for block in dictx['blocks']:
         if(block['type']==0):
             pontosBlock = block['bbox']
@@ -492,9 +534,15 @@ def extract_text_from_page(doc, pagina, deslocy, topmargin, bottommargin, leftma
                      math.ceil(float(pontosLine[2])), math.floor(float(pontosLine[3])-1))
                 mapeamento[bloco][linha] = []
                 for span in line['spans']:
+                    a = span["ascender"]
+                    d = span["descender"]
+                    #r = fitz.Rect(span["bbox"])
+                    #r.y1 = r.y1 
+                    #r.y0 = r.y0 
                     r = fitz.Rect(span["bbox"])
-                    r.y1 = r.y1 -1
-                    r.y0 = r.y0 +1
+                    o = fitz.Point(span["origin"])  # its y-value is the baseline
+                    r.y1 = o.y - span["size"] * d / (a - d)
+                    r.y0 = r.y1 - span["size"]
                     x0 = y0 = x1 = y1 = None
                     for char in span['chars']:
                         bboxchar = char['bbox']
@@ -503,9 +551,11 @@ def extract_text_from_page(doc, pagina, deslocy, topmargin, bottommargin, leftma
                         if(bboxxmedio < leftmargin or bboxxmedio > rightmargin or bboxymedio < topmargin or bboxymedio > bottommargin):
                             continue
                         x0 = math.floor(float(bboxchar[0]))
-                        y0 = math.floor(r.y0)
+                        #y0 = math.floor(r.y0)
+                        y0 = r.y0 -1
                         x1 = math.ceil(float(bboxchar[-2]))
-                        y1 = math.floor(r.y1)
+                        #y1 = math.floor(r.y1)
+                        y1 = r.y1 -1
                         c = char['c']
                         if(replace_accent):
                             codePoint = ord(c)
@@ -515,12 +565,15 @@ def extract_text_from_page(doc, pagina, deslocy, topmargin, bottommargin, leftma
                         mapeamento[bloco][linha].append((x0, y0, x1, y1, c))
                         quadspagina.append((x0, y0, x1, y1, c))
                         novotexto += c
+                        init += 1
                 if(len(novotexto) > 0 and novotexto[-1]!=' '):
                     novotexto += ' '
                     quadspagina.append((x0, y0, x1, y1, ' '))
+                    init += 1
             if(len(novotexto) > 0 and novotexto[-1]!=' '):
                 novotexto += ' '
                 quadspagina.append((x0, y0, x1, y1, ' '))
+                init += 1
         elif(block['type']==1):
             pontosBlock = block['bbox']
             bloco = (math.floor(float(pontosBlock[0])), math.floor(float(pontosBlock[1])), \
@@ -542,13 +595,13 @@ def copy_to_clipboard(tipo, conteudo):
         elif plt == 'Linux':
             subprocess.Popen(['xclip', '-selection', 'clipboard', '-t', 'text/rtf'], stdin=subprocess.PIPE).communicate(conteudo)
 
-def connectDB(dbpath='', timeout=10, maxrepeat=-1):
+def connectDB(dbpath='', timeout=10, maxrepeat=-1,  check_same_thread_arg=True):
     #hasconn = False
     repeat = 0
     #print("Connecting: {}".format(dbpath))
     while(repeat < maxrepeat or maxrepeat==-1):
         try:
-            sqliteconn = sqlite3.connect(str(dbpath), timeout=timeout, factory=classes_general.Custom_Database)
+            sqliteconn = sqlite3.connect(str(dbpath), timeout=timeout, factory=classes_general.Custom_Database, check_same_thread=check_same_thread_arg)
             return sqliteconn
         except Exception as ex:
             printlogexception(ex=ex)
@@ -564,11 +617,13 @@ def md5(path_pdf):
             f.seek(- 4096 * 1024 * 8, 2)
         for chunk in iter(lambda: f.read(4096), b""):
             hash_md5.update(chunk)
-    return hash_md5.hexdigest()
+    digest = hash_md5.hexdigest()
+    print(path_pdf, digest)
+    return digest
                 
 def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False, queuesair = None, \
                  idtermo = None, idtermopdf = None, erros_queue = None, fixo = None, result_queue = None,\
-                     jarecords=None, sqliteconnx=None, tocs_pdf=None):
+                     jarecords=None, sqliteconnx=None, tocs_pdf=None, listaTERMOS=None):
     def re_fn(expr, item):
         reg = re.compile(expr, re.I)
         return reg.search(item) is not None
@@ -613,6 +668,8 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
             parar = False
             
             for pages in records2:
+                if(listaTERMOS != None and not (termo.upper(),tipobusca) in listaTERMOS):
+                    break
                 #resultporsecao = 0
                 if(parar):
                     inserts = []
@@ -636,7 +693,7 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                     if(tocs_pdf==None):
                         toc = None
                     else:
-                        toc = locateToc(pages[0], pathpdf, None, len(devoltainit), tocs_pdf)
+                        toc = locateToc(pages[0], pathpdf, None, len(devoltainit), tocs_pdf)[0]
                     counter += 1
                     resultsearch = classes_general.ResultSearch()
                     resultsearch.toc = toc
@@ -651,7 +708,7 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                     resultsearch.idtermo = str(idtermo)
                     resultsearch.prior=int(resultsearch.idtermo)*-1
                     resultsearch.tptoc = 'tp'+str(idtermopdf)+resultsearch.toc
-                    snippet = ''.join(char if len(char.encode('utf-8')) < 3 else '�' for char in pages[1])
+                    snippet = ''.join(char if len(char.encode('utf-8')) <= 3 else '�' for char in pages[1])
                     snippetantes = ""
                     snippetdepois = ""
                     espacos = 0
@@ -707,6 +764,7 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                 return [resultados_para_banco, resultadosx] 
         elif(tipobusca=="LIKE"):  
             notok = True
+            records2 = []
             while(notok):
                 sqliteconn = None
                 cursor = None
@@ -716,6 +774,7 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                         cursor = sqliteconn.cursor()
                         cursor.custom_execute("PRAGMA journal_mode=WAL")
                         novabusca =  'SELECT  C.pagina, C.texto FROM Anexo_Eletronico_Conteudo_id_pdf_'+str(idpdf)+''' C where texto like :termo ESCAPE :escape ORDER BY 1'''
+                        
                         cursor.custom_execute(novabusca, {'termo':'%'+termo+'%', 'escape': '\\'})
                         records2 = cursor.fetchall()
                     else:
@@ -741,6 +800,8 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
             parar = False  
             resultporsecao = {}
             for pagina in records2:
+                if(listaTERMOS != None and not (termo.upper(),tipobusca) in listaTERMOS):
+                    break
                 if(parar):
                     break
                 jaachados = set()
@@ -748,26 +809,28 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                 qualcharfim = None
                 init = 0
                 resultfind = pagina[1].find(termo, init, len(pagina[1]))
+                
                 while resultfind!=-1:
+                    qualcharinit = resultfind
+                    qualcharfim = qualcharinit + len(termo)
+                    
                     ##busca simples
                     if(tocs_pdf==None):
                         toc = None
                     else:
-                        toc = locateToc(pagina[0], pathpdf, None, resultfind, tocs_pdf)
+                        toc = locateToc(pagina[0], pathpdf, None, resultfind, tocs_pdf)[0]
                     if(toc not in resultporsecao):
                         resultporsecao[toc]=0
                     if(resultporsecao[toc]>=3000):
                         break  
                     resultporsecao[toc]+=1
+                    resultsearch = classes_general.ResultSearch()
                     if(str(qualcharinit)+'-'+str(qualcharfim) in jaachados):
-                        init = resultfind+len(termo)-1
+                        init = resultfind+len(termo)
                         resultfind = pagina[1].find(termo, init, len(pagina[1]))
                     else:
                         jaachados.add(str(qualcharinit)+'-'+str(qualcharfim))
                         counter += 1
-                        qualcharinit = resultfind
-                        qualcharfim = qualcharinit + len(termo)
-                        resultsearch = classes_general.ResultSearch()
                                                 
                         resultsearch.init = qualcharinit
                         resultsearch.fim = qualcharfim
@@ -788,10 +851,11 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                                 char = pagina[1][k]
                                 if(char== ' '):
                                     espacos+=1                            
-                                if(len(char.encode('utf-8')) < 3):
+                                if(len(char.encode('utf-8')) <= 3):
                                     snippetantes = char + snippetantes
                                 else:
                                     snippetantes = '�' + snippetantes
+                                    #snippetantes = char + snippetantes
                                 if(espacos>=4):
                                     break
                             espacos = 0
@@ -799,15 +863,16 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                                 char = pagina[1][k]
                                 if(char== ' '):
                                     espacos+=1 
-                                if(len(char.encode('utf-8')) < 3):
+                                if(len(char.encode('utf-8')) <= 3):
                                     snippetdepois += char 
                                 else:
                                     snippetdepois += '�'
+                                    #snippetdepois += char
                                 #snippetdepois += snippet[k] 
                                 if(espacos>=4):
                                     break    
                             #snippetantes = ''.join(char if len(char.encode('utf-8')) < 3 else '�' for char in snippetantes)
-                            termo = ''.join(char if len(char.encode('utf-8')) < 3 else '�' for char in termo)
+                            termo2 = ''.join(char if len(char.encode('utf-8')) <= 3 else '�' for char in termo)
                             resultsearch.idtermopdf = idtermopdf
                             resultsearch.idtermo = idtermo
                             resultsearch.prior=int(resultsearch.idtermo)*-1
@@ -815,7 +880,7 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                             resultsearch.counter = counter
                             resultsearch.toc = toc
                             resultsearch.tptoc = 'tp'+str(idtermopdf)+resultsearch.toc
-                            resultsearch.snippet =  (snippetantes, termo, snippetdepois)
+                            resultsearch.snippet =  (snippetantes, termo2, snippetdepois)
                         
                             resultados_para_banco.append((resultsearch.idtermo, resultsearch.idpdf, \
                                                      resultsearch.pagina, resultsearch.init, resultsearch.fim, resultsearch.toc, snippetantes, snippetdepois, termo))
@@ -825,25 +890,25 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                             resultsearch.prior=-math.inf
                             
                         init = resultfind+len(termo)-1
-                        resultfind = pagina[1].find(termo, init, len(pagina[1]))
-                    if(queuesair != None and not queuesair.empty()):
-                        x = queuesair.get()    
-                        if(x[0]=='pararbusca' and str(x[1])==str(idtermo)): 
-                            parar = True
-                            resultadosx = []
-                        elif(x[0]=='sairtudo'):                            
-                            parar = True
-                            queuesair.put(x)
-                            return False
+                        resultfind = pagina[1].find(termo, init)
+                        if(queuesair != None and not queuesair.empty()):
+                            x = queuesair.get()    
+                            if(x[0]=='pararbusca' and str(x[1])==str(idtermo)): 
+                                parar = True
+                                resultadosx = []
+                            elif(x[0]=='sairtudo'):                            
+                                parar = True
+                                queuesair.put(x)
+                                return False
+                            else:
+                                queuesair.put(x)
+                        if(not simplesearch):
+                            if(parar):
+                                resultadosx = []
+                                break
+                            resultadosx.append(resultsearch)
                         else:
-                            queuesair.put(x)
-                    if(not simplesearch):
-                        if(parar):
-                            resultadosx = []
-                            break
-                        resultadosx.append(resultsearch)
-                    else:
-                        results.append((resultsearch))
+                            results.append((resultsearch))
                 countpagina += 1
             #for resu in resultadosx:
                   
@@ -853,29 +918,36 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                 #result_queue.put((1, resultadosx))
                 return [resultados_para_banco, resultadosx] 
         elif(tipobusca=="REGEX"): 
+            
             notok = True
             while(notok):
                 sqliteconn = None
                 cursor = None
                 try:
                     if(not simplesearch):
-                        sqliteconn = connectDB(str(pathdb))
+                        sqliteconn = connectDB(str(pathdb), check_same_thread_arg=False)
                         sqliteconn.create_function("REGEXP", 2, re_fn)
                         cursor = sqliteconn.cursor()
                         cursor.custom_execute("PRAGMA journal_mode=WAL")
                         novabusca =  'SELECT  C.pagina, C.texto FROM Anexo_Eletronico_Conteudo_id_pdf_'+str(idpdf)+''' C where C.texto REGEXP :regex ORDER BY 1'''
-                        cursor.custom_execute(novabusca, {'regex':termo})
+                        cursor.custom_execute(novabusca, {'regex':termo}, timeout=30)
                         records2 = cursor.fetchall()
                     
                     notok = False
+                except classes_general.TimeLimitExecuteException as ex:
+                    sqliteconn.interrupt()
+                    #except:
+                    #    None
+                    raise# classes_general.TimeLimitExecuteException()
                 except sqlite3.OperationalError as ex:
-                    utilities_general.printlogexception(ex=ex)
+                    erros_queue.put(('2', traceback.format_exc()))
+                    #utilities_general.printlogexception(ex=ex)
                     time.sleep(2)
                 except Exception as ex:
-                    utilities_general.printlogexception(ex=ex)
-                finally:
-                    
-                    try:
+                    erros_queue.put(('2', traceback.format_exc()))
+                #    utilities_general.printlogexception(ex=ex)
+                finally:                    
+                    try:                     
                         sqliteconn.close()
                     except Exception as ex:
                         None
@@ -886,9 +958,13 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
             parar = False  
             resultporsecao = {}
             for pagina in records2:
+                if(listaTERMOS != None and not (termo.upper(),tipobusca) in listaTERMOS):
+                    break
                 matches = [x.group() for x in re.finditer(termo, pagina[1])]
                 jamatched = set()
                 for match in matches:
+                    if(listaTERMOS != None and not (termo.upper(),tipobusca) in listaTERMOS):
+                        break
                     if(match in jamatched):
                         continue
                     jamatched.add(match)
@@ -897,29 +973,35 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                     jaachados = set()
                     init = 0
                     resultfind = pagina[1].find(match, init, len(pagina[1]))
+                    #
                     while resultfind!=-1:
+                       
                         ##busca simples
+                        qualcharinit = resultfind
+                        qualcharfim = qualcharinit + len(match)
+                        
                         if(tocs_pdf==None):
                             toc = None
                         else:
-                            toc = locateToc(pagina[0], pathpdf, None, resultfind, tocs_pdf)
+                            toc = locateToc(pagina[0], pathpdf, None, resultfind, tocs_pdf)[0]
                         if(toc not in resultporsecao):
                             resultporsecao[toc]=0
                         if(resultporsecao[toc]>=3000):
                             break  
                         resultporsecao[toc]+=1
                         if(str(qualcharinit)+'-'+str(qualcharfim) in jaachados):
-                            init = resultfind+len(match)-1
+                            init = resultfind+len(match)
                             resultfind = pagina[1].find(match, init, len(pagina[1]))
-                        else:
+                        else:                            
                             jaachados.add(str(qualcharinit)+'-'+str(qualcharfim))
                             counter += 1
-                            qualcharinit = resultfind
-                            qualcharfim = qualcharinit + len(match)
+                            #qualcharinit = resultfind
+                            #qualcharfim = qualcharinit + len(match)
                             resultsearch = classes_general.ResultSearch()
                                                     
                             resultsearch.init = qualcharinit
-                            resultsearch.fim = qualcharfim
+                            resultsearch.fim = qualcharinit + len(match)
+                            #erros_queue.put(('2', termo, match, pagina[0], qualcharinit, qualcharfim))
                             resultsearch.pagina = pagina[0]
     
                             pathpdf = get_normalized_path(pathpdf)
@@ -938,7 +1020,7 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                                     char = pagina[1][k]
                                     if(char== ' '):
                                         espacos+=1                            
-                                    if(len(char.encode('utf-8')) < 3):
+                                    if(len(char.encode('utf-8')) <= 3):
                                         snippetantes = char + snippetantes
                                     else:
                                         snippetantes = '�' + snippetantes
@@ -949,7 +1031,7 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                                     char = pagina[1][k]
                                     if(char== ' '):
                                         espacos+=1 
-                                    if(len(char.encode('utf-8')) < 3):
+                                    if(len(char.encode('utf-8')) <= 3):
                                         snippetdepois += char 
                                     else:
                                         snippetdepois += '�'
@@ -957,7 +1039,7 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                                     if(espacos>=4):
                                         break    
                                 #snippetantes = ''.join(char if len(char.encode('utf-8')) < 3 else '�' for char in snippetantes)
-                                match = ''.join(char if len(char.encode('utf-8')) < 3 else '�' for char in match)
+                                match2 = ''.join(char if len(char.encode('utf-8')) <= 3 else '�' for char in match)
                                 resultsearch.idtermopdf = idtermopdf
                                 resultsearch.idtermo = idtermo
                                 resultsearch.prior=int(resultsearch.idtermo)*-1
@@ -965,7 +1047,7 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                                 resultsearch.counter = counter
                                 resultsearch.toc = toc
                                 resultsearch.tptoc = 'tp'+str(idtermopdf)+resultsearch.toc
-                                resultsearch.snippet =  (snippetantes, match, snippetdepois)
+                                resultsearch.snippet =  (snippetantes, match2, snippetdepois)
                                 #resultsearch.snippet =  ("", match, "")
                             
                                 resultados_para_banco.append((resultsearch.idtermo, resultsearch.idpdf, \
@@ -1001,15 +1083,21 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
             #    result_queue.put(resu)  
             #result_queue.put((1, resultadosx)) 
             return [resultados_para_banco, resultadosx]  
-
+    except classes_general.TimeLimitExecuteException as ex:
+        raise
             
     except sqlite3.Error as ex:
-        erros_queue.put(('2', traceback.format_exc()))
-        utilities_general.printlogexception(ex=ex)
+        raise
+        #erros_queue.put(('3', traceback.format_exc()))
+        #utilities_general.printlogexception(ex=ex)
                     
     except Exception as ex:
-        erros_queue.put(('2', traceback.format_exc()))
-        utilities_general.printlogexception(ex=ex)
+        raise
+        #erros_queue.put(('3', traceback.format_exc()))
+        #utilities_general.printlogexception(ex=ex)
     
-    finally:        
-        doc.close()
+    finally: 
+        try:
+            doc.close()
+        except:
+            None

@@ -49,6 +49,7 @@ def popup(window, varok, texto = 'Os arquivos não possuem HASH compatível.\n\n
 class App():
     def __init__(self, version, gotoviewer=False):
         self.root = tkinter.Toplevel()
+        self.root.bind('<Control-Shift-L>', lambda e: global_settings.log_window.deiconify())
         self.root.protocol("WM_DELETE_WINDOW", lambda : global_settings.on_quit())
         
         self.version = global_settings.version
@@ -188,11 +189,16 @@ class App():
                     cursor.custom_execute("PRAGMA foreign_keys = ON")
                     cursor.custom_execute('''SELECT P.rel_path_pdf, P.indexado, P.id_pdf, P.hash FROM Anexo_Eletronico_Pdfs P WHERE P.id_pdf = ? ''', (values[0],))
                     record = cursor.fetchone()
+                    relpathpdf_old = record[0]
+                    pathpdf_old = utilities_general.get_normalized_path(os.path.join(global_settings.pathdb.parent, relpathpdf_old))                    
+                    relpathpdf = os.path.relpath(path, global_settings.pathdb.parent)
+                    pathpdf_new = utilities_general.get_normalized_path(os.path.join(global_settings.pathdb.parent, relpathpdf))
+                    name = os.path.basename(relpathpdf)
                     if(record[3]==hashpdf):
-                        relpathpdf = os.path.relpath(path, global_settings.pathdb.parent)
                         name = os.path.basename(relpathpdf)
                         cursor.custom_execute("UPDATE Anexo_Eletronico_Pdfs set rel_path_pdf = ? WHERE id_pdf = ?", (relpathpdf, record[2],))
                         parentpath = Path(path).parent
+                        
                         try:
                             if(not self.dirs.exists(str(parentpath))):
                                 self.dirs.insert('', index='end', iid=str(parentpath), text=str(parentpath), values=("","","",""))
@@ -200,11 +206,38 @@ class App():
                             utilities_general.printlogexception(ex=ex)
                         try:
                             relative_path = os.path.relpath(path, parentpath)
-                            self.dirs.insert(str(parentpath), index='end', iid='idpdf'+str(values[0]), text=str(relative_path), values=(values[0],"100%","OK", values[3], path))
+                            self.dirs.item('idpdf'+str(values[0]), text=str(relative_path))
+                            self.dirs.item('idpdf'+str(values[0]), values=(values[0],"100%","OK", values[3], path))
                             self.dirs.see('idpdf'+str(values[0]))
-                            self.dirs.delete(selecao)
+                            #self.dirs.delete(selecao)
                         except Exception as ex:
-                            None
+                            utilities_general.printlogexception(ex=ex)
+                        
+                        pathpdf = utilities_general.get_normalized_path(pathpdf_new)
+                        #class RelatorioSuccint:
+                        #    def __init__(self, idpdf, toc, lenpdf, pixorgw, pixorgh, mt, mb, me, md, paginasindexadas, rel_path_pdf, abs_path_pdf, tipo):
+                        relatorio_proxy = classes_general.RelatorioSuccint(values[0], global_settings.infoLaudo[pathpdf_old].toc,\
+                                                                           global_settings.infoLaudo[pathpdf_old].len,\
+                                                                           global_settings.infoLaudo[pathpdf_old].pixorgw,\
+                                                                           global_settings.infoLaudo[pathpdf_old].pixorgh,\
+                                                                           global_settings.infoLaudo[pathpdf_old].mt,\
+                                                                           global_settings.infoLaudo[pathpdf_old].mb,\
+                                                                           global_settings.infoLaudo[pathpdf_old].me,\
+                                                                           global_settings.infoLaudo[pathpdf_old].md,\
+                                                                           global_settings.infoLaudo[pathpdf_old].len,\
+                                                                           relpathpdf, pathpdf, global_settings.infoLaudo[pathpdf_old].tipo)
+                                                                                                             
+                        global_settings.infoLaudo[pathpdf]=global_settings.infoLaudo[pathpdf_old]
+                        global_settings.listaRELS[pathpdf]=relatorio_proxy
+                        
+                        global_settings.listaRELS[pathpdf].status="indexado"
+                        global_settings.infoLaudo[pathpdf].status="indexado"
+                        global_settings.infoLaudo[pathpdf].paginasindexadas=global_settings.infoLaudo[pathpdf_old].len
+                        
+                        global_settings.infoLaudo[pathpdf].rel_path_pdf = relpathpdf
+                        
+                        del global_settings.infoLaudo[pathpdf_old]
+                        del global_settings.listaRELS[pathpdf_old]
                         sqliteconn.commit()
                     else:
                         varok = tkinter.BooleanVar()
@@ -215,21 +248,17 @@ class App():
                         self.root.wait_window(window)
                         
                         if(varok.get()):
-                            marginsok = False
-                            pathpdf2 = utilities_general.get_normalized_path(str(path))
-                            doc = fitz.open(pathpdf2)
+                            global_settings.send_vacuum = True
+                            doc = fitz.open(pathpdf_new)
                             try:
-                                marginsok = False
                                 document_margin = classes_general.Document_Margin(doc)     
                                 if(not document_margin.marginsok):
                                     return
-                                relpathpdf = os.path.relpath(path, global_settings.pathdb.parent)
-                                name = os.path.basename(relpathpdf)
-                                cursor.custom_execute("UPDATE Anexo_Eletronico_Pdfs set indexado = 0 WHERE id_pdf = ?", (record[2],))
+                                cursor.custom_execute("UPDATE Anexo_Eletronico_Pdfs set rel_path_pdf = ?, indexado = ?, hash = ?, doclen = ?  WHERE id_pdf = ?", \
+                                                      (relpathpdf, 0,'', len(doc), record[2],))
                                 cursor.custom_execute("DELETE FROM Anexo_Eletronico_Tocs WHERE id_pdf = ?", (record[2],))
-                                cursor.custom_execute("UPDATE Anexo_Eletronico_Pdfs set rel_path_pdf = ?, hash = ? WHERE id_pdf = ?", (relpathpdf, hashpdf, record[2],))
-                                cursor.custom_execute("UPDATE Anexo_Eletronico_Obsitens set status = 'alterado' WHERE id_pdf = ?", (record[2],))
-                                parentpath = Path(path).parent
+                                cursor.custom_execute("UPDATE Anexo_Eletronico_Obsitens set status = 'alterado'  WHERE id_pdf = ?", (record[2],))
+                                parentpath = Path(pathpdf_new).parent
                                 idpdf = record[2]
                                 relp = Path(utilities_general.get_normalized_path(os.path.join(global_settings.pathdb.parent, str(relpathpdf))))
                                 relpdir = relp.parent
@@ -238,11 +267,28 @@ class App():
                                 mmtopxbottom = math.ceil(pixorg.height-(document_margin.mb/25.4*72))
                                 mmtopxleft = math.floor(document_margin.me/25.4*72)
                                 mmtopxright = math.ceil(pixorg.width-(document_margin.md/25.4*72))
+                                
+                                global_settings.infoLaudo[pathpdf_new] = classes_general.Relatorio() 
+                                global_settings.infoLaudo[pathpdf_new].mt = document_margin.mt
+                                global_settings.infoLaudo[pathpdf_new].mb = document_margin.mb
+                                global_settings.infoLaudo[pathpdf_new].me = document_margin.me
+                                global_settings.infoLaudo[pathpdf_new].md = document_margin.md
+                                global_settings.infoLaudo[pathpdf_new].rel_path_pdf = relpathpdf
+                                global_settings.infoLaudo[pathpdf_new].hash = ''
+                                global_settings.infoLaudo[pathpdf_new].status = 'naoindexado'
+                                global_settings.documents_to_index.append(pathpdf_new)
+                                global_settings.infoLaudo[pathpdf_new].id = idpdf
+                                global_settings.infoLaudo[pathpdf_new].len = len(doc)
+                                global_settings.infoLaudo[pathpdf_new].paginasindexadas = 0
+                                global_settings.infoLaudo[pathpdf_new].pixorgw = pixorg.width
+                                global_settings.infoLaudo[pathpdf_new].pixorgh = pixorg.height
+                                #T.toc_unit, T.pagina, T.deslocy, T.init
+                                nameddests = {}
                                 try:
                                     nameddests = grabNamedDestinations(doc)
-                                    #
                                 except Exception as ex:
-                                    nameddests = []
+                                    utilities_general.printlogexception(ex=ex)
+                                    nameddests = {}
                                 toc = doc.get_toc(simple=False)
                                 listatocs = []
                                 for entrada in toc:
@@ -259,39 +305,44 @@ class App():
                                         arquivocomdest = entrada[3]['file'].split("#")
                                         arquivo = arquivocomdest[0]
                                         dest = arquivocomdest[1]
-                                        if(os.path.basename(pathpdf2)==arquivo):
-                                            for sec in nameddests:
-                                                if(dest==sec[0]):
-                                                    pagina = int(sec[1])
-                                                    deslocy = pixorg.height-round(float(sec[3]))
-                                                    break
+                                        if(os.path.basename(pathpdf_new)==arquivo):
+                                            if(dest in nameddests):
+                                            #for sec in nameddests:
+                                                #if(dest==sec[0]):
+                                                pagina = int(nameddests[dest][0])
+                                                deslocy = pixorg.height-round(float(nameddests[dest][2]))
+                                                #break
                                     if(pagina==None):
+                                        None
                                         continue
-                                    #extract_text_from_page(doc, pagina, deslocy, topmargin, bottommargin, leftmargin, rightmarin, flags=2+64):
-                                    text_extracted = utilities_general.extract_text_from_page(doc, pagina, deslocy, mmtopxtop, mmtopxbottom, mmtopxleft, mmtopxright, flags=2+64)
-                                    init = text_extracted[0]
-                                    novotexto = text_extracted[1]
- 
+                                    extrair_texto = utilities_general.extract_text_from_page(doc, pagina, deslocy, mmtopxtop, mmtopxbottom, mmtopxleft, mmtopxright)
+                                    init = extrair_texto[0]
+                                    novotexto = extrair_texto[1]
                                     listatocs.append((entrada[1], idpdf, pagina, deslocy, init,))
+                                for toc in listatocs:
+                                    global_settings.infoLaudo[pathpdf_new].toc.append((toc[0], int(toc[2]), int(toc[3]), int(toc[4])))
+                                global_settings.infoLaudo[pathpdf_new].ultimaPosicao=0.0
+                                global_settings.infoLaudo[pathpdf_new].tipo = global_settings.infoLaudo[pathpdf_old].tipo
+                                
+                                global_settings.infoLaudo[pathpdf_new].parent_alias = global_settings.infoLaudo[pathpdf_old].parent_alias
+                                global_settings.infoLaudo[pathpdf_new].zoom_pos = global_settings.infoLaudo[pathpdf_old].zoom_pos
+                                #class RelatorioSuccint:
+                                #    def __init__(self, idpdf, toc, lenpdf, pixorgw, pixorgh, mt, mb, me, md, paginasindexadas, rel_path_pdf, abs_path_pdf, tipo):
+                                relatorio_proxy = classes_general.RelatorioSuccint(idpdf, global_settings.infoLaudo[pathpdf_new].toc, global_settings.infoLaudo[pathpdf_new].len, \
+                                                                                   pixorg.width, pixorg.height, document_margin.mt, document_margin.mb, document_margin.me, \
+                                                                                       document_margin.md, 0, \
+                                                                                       relpathpdf, pathpdf_new, global_settings.infoLaudo[pathpdf_old].tipo)   
+                                global_settings.listaRELS[pathpdf_new] = relatorio_proxy
+                                
+                                del global_settings.infoLaudo[pathpdf_old]
+                                del global_settings.listaRELS[pathpdf_old]
+                                if pathpdf_old in global_settings.documents_to_index:
+                                    global_settings.documents_to_index.remove(pathpdf_old)
                                 insert_query_toc = """INSERT INTO Anexo_Eletronico_Tocs
                                         (toc_unit, id_pdf , pagina, deslocy, init) VALUES
                                         (?,?,?,?,?)
                                 """
                                 cursor.custom_executemany(insert_query_toc, listatocs)
-                                global_settings.infoLaudo[pathpdf2].mt = mmtopxtop
-                                global_settings.infoLaudo[pathpdf2].mb = mmtopxbottom
-                                global_settings.infoLaudo[pathpdf2].me = mmtopxleft
-                                global_settings.infoLaudo[pathpdf2].md = mmtopxright
-                                global_settings.infoLaudo[pathpdf2].rel_path_pdf = record[0]
-                                global_settings.infoLaudo[pathpdf2].hash = ''
-                                global_settings.infoLaudo[pathpdf2].status = 'naoindexado'
-                                global_settings.documents_to_index.append(abs_path_pdf)
-                                global_settings.infoLaudo[pathpdf2].len = len(doc)
-                                global_settings.infoLaudo[pathpdf2].pixorgw = pixorg.width
-                                global_settings.infoLaudo[pathpdf2].pixorgh = pixorg.height
-                                global_settings.infoLaudo[pathpdf2].toc = []
-                                for toc in listatocs:
-                                    global_settings.infoLaudo[pathpdf2].toc.append((toc[0], int(toc[1]), int(toc[2]), int(toc[3])))
                             except Exception as ex:
                                 utilities_general.printlogexception(ex=ex)
                             finally:
@@ -301,16 +352,16 @@ class App():
                                 if(not self.dirs.exists(str(parentpath))):
                                     self.dirs.insert('', index='end', iid=str(parentpath), text=str(parentpath), values=("","","",""))
                             except Exception as ex:
-                                None
                                 utilities_general.printlogexception(ex=ex)
-                                None
                             try:
-                                relative_path = os.path.relpath(path, parentpath)
-                                self.dirs.insert(str(parentpath), index='end', iid='idpdf'+str(values[0]), text=str(relative_path), values=(values[0],"0%","Indexando", values[3], path))
-                                self.dirs.delete(selecao)
-                                self.dirs.see('idpdf'+str(values[0]))
+                                idpdfitem = 'idpdf'+str(record[2])
+                                values = self.dirs.item(idpdfitem, 'values')
+                                self.dirs.item(idpdfitem, values=(values[0], '0%', 'Indexando', values[3], values[4]))
+                                #self.dirs.insert(str(parentpath), index='end', iid='idpdf'+str(values[0]), text=str(relative_path), values=(values[0],"0%","Indexando", values[3], path))
+                                #self.dirs.delete(selecao)
+                                self.dirs.see(idpdfitem)
                             except Exception as ex:
-                                None
+                                utilities_general.printlogexception(ex=ex)
                             cursor.custom_execute("DELETE FROM Anexo_Eletronico_SearchResults where id_pdf = ?", (record[2],))                
                             check_previous_search =  "SELECT DISTINCT C.termo, C.tipobusca, C.id_termo, C.fixo, C.pesquisado  FROM Anexo_Eletronico_SearchTerms C ORDER by 3"
                             cursor.custom_execute(check_previous_search)
@@ -321,6 +372,8 @@ class App():
                                 updateinto2 = "UPDATE Anexo_Eletronico_SearchTerms set pesquisado = ? WHERE id_termo = ?"
                                 cursor.custom_execute(updateinto2, (pesquisados, id_termo))
                             sqliteconn.commit()
+                            utilities_general.initiate_indexing_thread()
+
                             
                 except Exception as ex:
                     None
@@ -372,22 +425,23 @@ class App():
                 if(proc[0]=='update'):
                     idpdf = global_settings.infoLaudo[proc[1]].id
                     global_settings.infoLaudo[proc[1]].paginasindexadas += proc[2]
+                    global_settings.infoLaudo[proc[1]].paginasindexadas = min(global_settings.infoLaudo[proc[1]].paginasindexadas, global_settings.infoLaudo[proc[1]].len)
                     #None
                     porcent = round(global_settings.infoLaudo[proc[1]].paginasindexadas / global_settings.infoLaudo[proc[1]].len * 100)
                     idpdfitem = 'idpdf'+str(idpdf)
                     values = self.dirs.item(idpdfitem, 'values')
                     self.dirs.item(idpdfitem, values=(values[0], str(porcent)+'%', values[2], values[3], values[4]))
-                elif(proc[0]=='ok'):
-                    idpdf = global_settings.infoLaudo[proc[1]].id
+                if(proc[0]=='saving'):
+                    idpdf = proc[2]
                     idpdfitem = 'idpdf'+str(idpdf)
-                    global_settings.finalizados += 1
-                    idpdf = self.dirs.item(idpdfitem, 'values')[0]
-                    global_settings.paginasindexadas += proc[3]
-                    porcent = round(global_settings.infoLaudo[proc[1]].paginasindexadas / global_settings.infoLaudo[proc[1]].len * 100)  
                     values = self.dirs.item(idpdfitem, 'values')
-                    self.dirs.item(idpdfitem, values=(values[0], str(porcent)+'%', values[2], values[3], values[4]))
-                    if(global_settings.infoLaudo[proc[1]].paginasindexadas==global_settings.infoLaudo[proc[1]].len):
-                        self.dirs.item(idpdfitem, values=(idpdf,"100%","-","-","-","-"))
+                    self.dirs.item(idpdfitem, values=(values[0], "Finalizando...", values[2], values[3], values[4]))
+                elif(proc[0]=='ok'):
+                    idpdf = global_settings.infoLaudo[proc[2]].id
+                    idpdfitem = 'idpdf'+str(idpdf)
+                    values = self.dirs.item(idpdfitem, 'values')
+                    #idpdf,"100%",'OK', tipo, relatorio
+                    self.dirs.item(idpdfitem, values=(idpdf,"100%","OK",values[3],values[4]))
 
         except Exception as ex:
             utilities_general.printlogexception(ex=ex)
@@ -479,10 +533,11 @@ class App():
                     cursor.custom_execute(updateinto2, (pesquisados, id_termo))
                 del global_settings.infoLaudo[abs_path_pdf]
                 del global_settings.listaRELS[abs_path_pdf]
-                global_settings.documents_to_index.remove(abs_path_pdf)
+                if abs_path_pdf in global_settings.documents_to_index:
+                    global_settings.documents_to_index.remove(abs_path_pdf)
             for selection in self.dirs.selection():
                 self.dirs.delete(selection)
-            
+            global_settings.send_vacuum = True
             sqliteconn.commit()
 
         except Exception as ex:
@@ -625,7 +680,7 @@ def grabNamedDestinations(doc):
         else:            
             None
     except Exception as ex:
-        utilities_general.printlogexception(ex=ex)
+        #utilities_general.printlogexception(ex=ex)
         None
         
     
@@ -667,6 +722,7 @@ def addrels(tipo, view=None, pathpdfinput = None, pathdbext=None, rootx=None, sq
         pathpdfs = pathpdfinput
         #global_settings.pathdb = Path(pathdbext) 
     if(pathpdfs!=None and pathpdfs!=''):
+        global_settings.send_vacuum = True
         sqliteconn = None
         
         if(sqliteconnx==None):
@@ -677,7 +733,6 @@ def addrels(tipo, view=None, pathpdfinput = None, pathdbext=None, rootx=None, sq
         try:
             global_settings.askformargins = True
             for patpdf in pathpdfs:
-                #print(patpdf)
                 pathpdf = Path(patpdf)
                 relpathpdf = os.path.relpath(pathpdf, global_settings.pathdb.parent)
                 filename, file_extension = os.path.splitext(patpdf)
@@ -688,7 +743,7 @@ def addrels(tipo, view=None, pathpdfinput = None, pathdbext=None, rootx=None, sq
                 if(file_extension.lower()==".pdf"):
                     cursor.custom_execute("PRAGMA foreign_keys = ON")
                     cursor.custom_execute('''SELECT P.id_pdf, P.indexado, P.tipo, P.margemsup, P.margeminf, P.margemesq, P.margemdir, 
-                                   P.lastpos, P.hash, P.pixorgw, P.pixorgh, P.doclen FROM
+                                   P.lastpos, P.hash, P.pixorgw, P.pixorgh, P.doclen, P.parent_alias, P.zoom_pos FROM
                                    Anexo_Eletronico_Pdfs P where :pdf = P.rel_path_pdf ''',{'pdf': str(relpathpdf)})
                     r = cursor.fetchone()
                     idpdf = None
@@ -724,6 +779,10 @@ def addrels(tipo, view=None, pathpdfinput = None, pathdbext=None, rootx=None, sq
                             updateinto2 = "UPDATE Anexo_Eletronico_Pdfs set pixorgw = ?, pixorgh= ?, doclen = ? WHERE id_pdf = ?"
                             cursor.custom_execute(updateinto2, (int(pixorg.width), int(pixorg.height), doclen, r[0],))
                             sqliteconn.commit()
+                        
+                        global_settings.infoLaudo[abs_path_pdf].parent_alias = r[12]
+                        #print('v', global_settings.infoLaudo[abs_path_pdf].parent_alias)
+                        global_settings.infoLaudo[abs_path_pdf].zoom_pos = r[13]
                         global_settings.infoLaudo[abs_path_pdf].mt = r[3]
                         global_settings.infoLaudo[abs_path_pdf].mb = r[4]
                         global_settings.infoLaudo[abs_path_pdf].me = r[5]
@@ -745,6 +804,7 @@ def addrels(tipo, view=None, pathpdfinput = None, pathdbext=None, rootx=None, sq
                         paginasindexadas = 0
                         if(global_settings.infoLaudo[abs_path_pdf].status == 'indexado'):
                             paginasindexadas = doclen
+                        global_settings.infoLaudo[abs_path_pdf].paginasindexadas = paginasindexadas
                           
                         #class RelatorioSuccint:
                         #    def __init__(self, idpdf, toc, lenpdf, pixorgw, pixorgh, mt, mb, me, md, paginasindexadas, rel_path_pdf, abs_path_pdf, tipo):
@@ -759,8 +819,8 @@ def addrels(tipo, view=None, pathpdfinput = None, pathdbext=None, rootx=None, sq
                     else:
                         insert_query_pdf = """INSERT INTO Anexo_Eletronico_Pdfs
                                     (rel_path_pdf , indexado, tipo, lastpos, margemsup, margeminf, margemesq, margemdir,
-                                     pixorgw, pixorgh, doclen) VALUES
-                                    (?,?,?, '0.0', ?,?,?,?,?,?,?)
+                                     pixorgw, pixorgh, doclen, parent_alias, zoom_pos) VALUES
+                                    (?,?,?, '0.0', ?,?,?,?,?,?,?,?,?)
                         """
                         pdf = None
                         if(global_settings.askformargins):
@@ -773,7 +833,7 @@ def addrels(tipo, view=None, pathpdfinput = None, pathdbext=None, rootx=None, sq
                             doclen = len(doc)
                             doc.close()
                             pdf = (patpdf, global_settings.default_margin_top, global_settings.default_margin_bottom, \
-                                   global_settings.default_margin_left, global_settings.default_margin_right, pixorg, doclen)
+                                   global_settings.default_margin_left, global_settings.default_margin_right, pixorg, doclen, '', 0)
                         if(pdf==None):
                             print("ERRO")
                             continue
@@ -783,7 +843,7 @@ def addrels(tipo, view=None, pathpdfinput = None, pathdbext=None, rootx=None, sq
                         md = pdf[4]
                         pixorg = pdf[5]
                         doclen = pdf[6]
-                        cursor.custom_execute(insert_query_pdf, (relpathpdf, 0,tipo, mt, mb, me, md, int(pixorg.width), int(pixorg.height), doclen))
+                        cursor.custom_execute(insert_query_pdf, (relpathpdf, 0,tipo, mt, mb, me, md, int(pixorg.width), int(pixorg.height), doclen, '', 0))
                         mmtopxtop = math.floor(mt/25.4*72)
                         mmtopxbottom = math.ceil(pixorg.height-(mb/25.4*72))
                         mmtopxleft = math.floor(me/25.4*72)
@@ -847,8 +907,12 @@ def addrels(tipo, view=None, pathpdfinput = None, pathdbext=None, rootx=None, sq
                             global_settings.documents_to_index.append(abs_path_pdf)
                             global_settings.infoLaudo[pathpdf2].id = idpdf
                             global_settings.infoLaudo[pathpdf2].len = len(doc)
+                            global_settings.infoLaudo[pathpdf2].parent_alias = ''
+                           
+                            global_settings.infoLaudo[pathpdf2].zoom_pos = 0
                             global_settings.infoLaudo[pathpdf2].pixorgw = pixorg.width
                             global_settings.infoLaudo[pathpdf2].pixorgh = pixorg.height
+                            #global_settings.infoLaudo[pathpdf2].paginasindexadas = 0
                             #T.toc_unit, T.pagina, T.deslocy, T.init
                             for toc in listatocs:
                                 global_settings.infoLaudo[pathpdf2].toc.append((toc[0], int(toc[2]), int(toc[3]), int(toc[4])))
@@ -983,6 +1047,10 @@ def validate_annotation(sqliteconn, cursor):
                 doc.close()
             except:
                 None
+def update_db_version(sqliteconn, cursor):
+    updateinto2 = "UPDATE FERA_CONFIG set param = ? WHERE config = ?"
+    cursor.custom_execute(updateinto2, (global_settings.dbversion,'dbversion',))
+    sqliteconn.commit()
 
 def necessity_to_validate(cursor):
     try:
@@ -1013,7 +1081,11 @@ def necessity_to_validate(cursor):
 def validate_new_db_columns(cursor, must_commit=False):
        
     commit = must_commit  
-    
+    try:
+        cursor.custom_execute("ALTER TABLE Anexo_Eletronico_Obsitens ADD COLUMN withalt INTEGER DEFAULT 0", None, False, False)
+        commit = True
+    except Exception as ex:
+        None
     try:
         cursor.custom_execute("ALTER TABLE Anexo_Eletronico_Obsitens ADD COLUMN conteudo TEXT DEFAULT ''", None, False, False)
         commit = True
@@ -1077,6 +1149,7 @@ def validate_new_db_columns(cursor, must_commit=False):
         commit = True    
     except Exception as ex:
         None
+    
     try:
         addcolumn2 = "ALTER TABLE Anexo_Eletronico_Pdfs ADD COLUMN pixorgw INTEGER"
         cursor.custom_execute(addcolumn2, None, False, False)
@@ -1095,6 +1168,19 @@ def validate_new_db_columns(cursor, must_commit=False):
         commit = True    
     except Exception as ex:
         None
+    try:
+        addcolumn2 = "ALTER TABLE Anexo_Eletronico_Pdfs ADD COLUMN parent_alias TEXT DEFAULT ''"
+        cursor.custom_execute(addcolumn2, None, False, False)
+        commit = True    
+    except Exception as ex:
+        None
+    try:
+        addcolumn2 = "ALTER TABLE Anexo_Eletronico_Pdfs ADD COLUMN zoom_pos INTEGER DEFAULT 0"
+        cursor.custom_execute(addcolumn2, None, False, False)
+        commit = True    
+    except Exception as ex:
+        None    
+    
     
         
     return commit
@@ -1105,13 +1191,13 @@ def create_edit_recent_cases():
         add = []
         add.append(str(global_settings.pathdb)+"\n")
         try:
-            with open(global_settings.recenttxt, 'r') as f:                   
+            with open(global_settings.recenttxt, 'r', encoding="utf-8") as f:                   
                for line in f:              
                    if(os.path.isfile(line.strip()) and  line not in add):
                        add.append(line)
         except Exception as ex:
             utilities_general.printlogexception(ex=ex)
-        with open(global_settings.recenttxt, 'w') as f:    
+        with open(global_settings.recenttxt, 'w', encoding="utf-8") as f:    
             for linha in add:                    
                 f.write(linha)
     except IOError as ex:
@@ -1162,8 +1248,10 @@ def loaddb(toplevel, event=None, lb1=None, addrel = None):
             try:
                 cursor = sqliteconn.cursor()
                 must_validate = necessity_to_validate(cursor)
-                if(necessity_to_validate):
+                validate_annotation(sqliteconn, cursor)
+                if(must_validate):
                     tocommit = validate_new_db_columns(cursor, must_validate)
+                    update_db_version(sqliteconn, cursor)
                 if(isinstance(toplevel, tkinter.Toplevel)):                   
                    toplevel.destroy()                
             except Exception as ex:
@@ -1193,8 +1281,10 @@ def gather_information_fromdb(sqliteconn):
     #sqliteconn = utilities_general.connectDB(str(global_settings.pathdb))
     cursor = sqliteconn.cursor()
     must_validate = necessity_to_validate(cursor)
-    if(necessity_to_validate):
+    tocommit = False
+    if(must_validate):
         tocommit = validate_new_db_columns(cursor, must_validate)
+        update_db_version(sqliteconn, cursor)
     if(tocommit):
        sqliteconn.commit() 
     totalpaginas = 0
@@ -1205,7 +1295,7 @@ def gather_information_fromdb(sqliteconn):
     except:
         None   
     select_all_pdfs = '''SELECT  P.id_pdf, P.rel_path_pdf, P.lastpos, P.tipo, P.margemsup, P.margeminf,
-    P.margemesq, P.margemdir, P.hash, P.indexado, P.pixorgw, P.pixorgh, P.doclen FROM 
+    P.margemesq, P.margemdir, P.hash, P.indexado, P.pixorgw, P.pixorgh, P.doclen, P.parent_alias, P.zoom_pos FROM 
     Anexo_Eletronico_Pdfs P ORDER BY 4,2
     '''
     porcento = 0
@@ -1229,6 +1319,7 @@ def gather_information_fromdb(sqliteconn):
             doclen = r[12]
             pixmapw = r[10]
             pixmaph = r[11]
+            parent_alias = r[13]
             if(r[12]==None):
                 
                 doc = fitz.open(abs_path_pdf)
@@ -1244,6 +1335,7 @@ def gather_information_fromdb(sqliteconn):
                     utilities_general.printlogexception(ex=ex)
                 finally:
                     doc.close()
+            global_settings.infoLaudo[abs_path_pdf].zoom_pos = r[14]
             global_settings.infoLaudo[abs_path_pdf].mt = r[4]
             global_settings.infoLaudo[abs_path_pdf].mb = r[5]
             global_settings.infoLaudo[abs_path_pdf].me = r[6]
@@ -1252,6 +1344,8 @@ def gather_information_fromdb(sqliteconn):
             global_settings.infoLaudo[abs_path_pdf].hash = r[8]
             global_settings.infoLaudo[abs_path_pdf].id = idpdf
             global_settings.infoLaudo[abs_path_pdf].len = doclen
+           
+            global_settings.infoLaudo[abs_path_pdf].parent_alias = parent_alias
             if(r[8]==1):
                 global_settings.infoLaudo[abs_path_pdf].pagiansprocessadas = global_settings.infoLaudo[abs_path_pdf].len
             else:
@@ -1308,7 +1402,6 @@ def createNewDbFile(toplevel, sqliteconnx=None):
             sqliteconn = utilities_general.connectDB(str(global_settings.pathdb))
         else:
             sqliteconn = sqliteconnx
-        print(sqliteconn)
         cursor = sqliteconn.cursor()
         try:
             cursor.custom_execute("PRAGMA foreign_keys = ON")
@@ -1329,7 +1422,10 @@ def createNewDbFile(toplevel, sqliteconnx=None):
             margemesq INTEGER NOT NULL,
             margemdir INTEGER NOT NULL,
             pixorgw INTEGER,
-            pixorgh INTEGER)
+            pixorgh INTEGER,
+            doclen INTEGER,
+            zoom_pos INTEGER DEFAULT 0,
+            parent_alias TEXT DEFAULT '')
             '''
     
             create_table_tocs = '''CREATE TABLE Anexo_Eletronico_Tocs (
@@ -1436,6 +1532,7 @@ def createNewDbFile(toplevel, sqliteconnx=None):
             status TEXT NOT NULl DEFAULT 'ok',
             conteudo TEXT DEFAULT '',
             arquivo TEXT DEFAULT '',
+            withalt INTEGER DEFAULT 0,
             CONSTRAINT fk_obs
                 FOREIGN KEY (id_obscat)
                     REFERENCES Anexo_Eletronico_Obscat (id_obscat)
@@ -1485,6 +1582,7 @@ def createNewDbFile(toplevel, sqliteconnx=None):
             cursor.custom_execute(create_table_obsitens)
             cursor.custom_execute(create_table_pdflinks)
             cursor.custom_execute(create_table_config)
+            sqliteconn.commit()
             insert_query_pdf = """INSERT INTO FERA_CONFIG
             (config , param) VALUES (?,?)   """
             cursor.custom_execute(insert_query_pdf, ('dbversion', str(global_settings.dbversion),))
@@ -1512,6 +1610,7 @@ class import_create_toplevel():
                 global_settings.pathdb = None
             
         toplevel = tkinter.Toplevel(global_settings.root)  
+        toplevel.bind('<Control-Shift-L>', lambda e: global_settings.log_window.deiconify())
         toplevel.protocol("WM_DELETE_WINDOW", lambda : on_quit(toplevel))
         toplevel.geometry("600x600")
         toplevel.title("FERA "+global_settings.version+" - Forensics Evidence Report Analyzer -- Polícia Científica do Paraná")
@@ -1545,14 +1644,15 @@ class import_create_toplevel():
         Lbvs.grid(row=2, column=2, rowspan=2, sticky='ns')
         Lb1.configure(yscrollcommand=Lbvs.set)
         try:        
-            with open(recenttxt, 'r') as f:
+            with open(recenttxt, 'r', encoding="utf-8") as f:
                 count = 1
                 for line in f:
                     if(os.path.isfile(line.strip())):
                         Lb1.insert(count, line)
                         count += 1
         except Exception as ex:
-            utilities_general.utilities_general.printlogexception(ex=ex)
+            None
+            #utilities_general.utilities_general.printlogexception(ex=ex)
         Lb1.bind_class('post-listbox-bind-search', '<Double-1>', lambda e, lb=Lb1: loaddb(toplevel, e, lb))
         Lb1.bind_class('post-listbox-bind-search','<1>',  lambda e,  lb=Lb1: check_clicklistbox(e, lb))
         global_settings.root.wait_window(toplevel)

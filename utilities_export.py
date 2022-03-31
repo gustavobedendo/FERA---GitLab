@@ -4,13 +4,13 @@ Created on Tue Feb  1 13:49:31 2022
 
 @author: labinfo
 """
-import tkinter
+import tkinter, subprocess, PIL
 import global_settings
 from tkinter import ttk
 from functools import partial
 from tkinter.filedialog import askdirectory
 import fitz, os
-import utilities_general
+import utilities_general, classes_general
 from pathlib import Path
 import shutil
 import binascii, platform
@@ -152,7 +152,7 @@ class ExportInterval():
             utilities_general.printlogexception(ex=ex)
             
 class Export_Images_To_Table():
-    def __init__(self, withnnotes):
+    def __init__(self, fera, withnnotes):
         try:
             window = tkinter.Toplevel()
             window.columnconfigure(0, weight=1)
@@ -191,20 +191,20 @@ class Export_Images_To_Table():
             images = []                
             anexosset = []
             anexos = ""
-            for iid in self.treeviewObs.selection():                    
-                self.descendants_obsitem(iid, lista)
+            for iid in fera.treeviewObs.selection():                    
+                fera.descendants_obsitem(iid, lista)
             sorted_by_second = sorted(lista, key=lambda tup: tup[1])
             for iidx in sorted_by_second:
                 pdf = iidx[1]
                 child2 = iidx[0]
-                valoresPecial = self.treeviewObs.item(child2, 'values')
+                valoresPecial = fera.treeviewObs.item(child2, 'values')
                 pagi = int(valoresPecial[2].strip())+1
                 if(pathdocespecial!=valoresPecial[1]):
-                    pathdocespecial1 = utilities_general.get_normalized_path(valoresPecial[1])
+                    pathdocespecial = utilities_general.get_normalized_path(valoresPecial[1])
                     pagatual = None
                     if(docespecial!=None):
                         docespecial.close()
-                    docespecial = fitz.open(pathdocespecial1)
+                    docespecial = fitz.open(pathdocespecial)
                 tiposelecao = valoresPecial[0]                    
                 pinit = int(valoresPecial[2])      
                 pfim = int(valoresPecial[5])
@@ -214,12 +214,13 @@ class Export_Images_To_Table():
                 p0yinit = (int(float(valoresPecial[4])))-2
                 p1xinit = (int(float(valoresPecial[6])))
                 p1yinit = (int(float(valoresPecial[7])))+2
-                listaaprocessar.append((pathdocespecial1, ))                    
+                listaaprocessar.append((pathdocespecial, ))                    
                 margemsup = (global_settings.infoLaudo[pathdocespecial].mt/25.4)*72
                 margeminf = global_settings.infoLaudo[pathdocespecial].pixorgh-((global_settings.infoLaudo[pathdocespecial].mb/25.4)*72)
                 margemesq = (global_settings.infoLaudo[pathdocespecial].me/25.4)*72
                 margemdir = global_settings.infoLaudo[pathdocespecial].pixorgw-((global_settings.infoLaudo[pathdocespecial].md/25.4)*72)
-                size = 0.0666666667*intervalo-10, 450                    
+                size = 0.0666666667*intervalo-10, 450    
+                japegos = set()                
                 for pagina in range(pinit2, pfim2+1):
                     p0x = max(p0xinit, margemesq)
                     if(pagina>pinit2):  
@@ -234,43 +235,82 @@ class Export_Images_To_Table():
                     links = docespecial[pagina].get_links()
                     for link in links:
                         r = link['from']
-                        file = link['file']
-                        mediay = (r.y1 + r.y0) / 2.0    
-                        if(p1y >= mediay and p0y <= mediay and (file, pathdocespecial1) not in imagens):
-                            if("#" in file):
-                                continue
-                            
-                            file = utilities_general.get_normalized_path(file)
-                            filepath = str(Path(utilities_general.get_normalized_path(os.path.join(Path(utilities_general.get_normalized_path(pathdocespecial1)).parent,file))))  
-                            pngtohex = ""
-                            content = ""
-                            width, height = None, None
-                            try:
-                                with Image.open(filepath) as imx:
-                                    imx.thumbnail(size, Image.ANTIALIAS)
-                                    imx.save('teste.png','PNG')
-                                    width, height = imx.size
-                                with open('teste.png', 'rb') as f:
-                                    content = f.read()
-                                    pngtohex = binascii.hexlify(content).decode('utf8')
-                                os.remove('teste.png')
+                        if('file' in link):
+                            file = link['file']
+                            mediay = (r.y1 + r.y0) / 2.0    
+                            if(p1y >= mediay and p0y <= mediay and (file, pathdocespecial) not in imagens):
+                                if("#" in file):
+                                    continue
                                 
-                                if(os.path.basename(pathdocespecial1) not in anexosset):
-                                    anexosset.append(os.path.basename(pathdocespecial1))
-                                
-                                imagens.append((filepath, pathdocespecial1, pagina, pngtohex, width, height))
-                            except Exception as ex:
-                                utilities_general.printlogexception(ex=ex)
+                                file = utilities_general.get_normalized_path(file)
+                                filepath = str(Path(utilities_general.get_normalized_path\
+                                                    (os.path.join(Path(utilities_general.get_normalized_path(pathdocespecial)).parent,file))))  
+                                if(filepath in japegos):
+                                    continue
+                                japegos.add(filepath)
+                                pngtohex = ""
+                                content = ""
+                                width, height = None, None
+                                try:
+                                    filename, extension = os.path.splitext(filepath)
+                                    if(extension in global_settings.listavidformats):
+                                        comando = f"ffmpeg -y -ss 1 -i \"{filepath}\" -frames:v 1 -q:v 2 teste.png"  
+                                        #popen = subprocess.Popen(comando, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                        popen = subprocess.run(comando,universal_newlines=True, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                                        #return_code = popen.wait()
+                                        if(not os.path.exists("teste.png")):
+                                            comando = f"ffmpeg -y -ss 0 -i \"{filepath}\" -frames:v 1 -q:v 2 teste.png"                                              
+                                            #popen = subprocess.Popen(comando, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                            popen = subprocess.run(comando,universal_newlines=True, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                                            #return_code = popen.wait()
+                                            lines = popen.stderr.split("\n")
+                                            if(len(lines)>0):
+                                                raise classes_general.FFMPEGException(lines)
+                                        if(os.path.exists("teste.png")):                                               
+                                            with Image.open("teste.png") as imx:
+                                                imx.thumbnail(size, Image.ANTIALIAS)
+                                                imx.save('teste.png','PNG')
+                                                width, height = imx.size
+                                            with open('teste.png', 'rb') as f:
+                                                content = f.read()
+                                                pngtohex = binascii.hexlify(content).decode('utf8')
+                                            if(os.path.basename(pathdocespecial) not in anexosset):
+                                                anexosset.append(os.path.basename(pathdocespecial))
+                                    else:
+                                        with Image.open(filepath) as imx:
+                                            imx.thumbnail(size, Image.ANTIALIAS)
+                                            imx.save('teste.png','PNG')
+                                            width, height = imx.size
+                                        with open('teste.png', 'rb') as f:
+                                            content = f.read()
+                                            pngtohex = binascii.hexlify(content).decode('utf8')
+                                       
+                                        
+                                        if(os.path.basename(pathdocespecial) not in anexosset):
+                                            anexosset.append(os.path.basename(pathdocespecial))
+                                    imagens.append((filepath, pathdocespecial, pagina, pngtohex, width, height))
+                                except PIL.UnidentifiedImageError:
+                                    None
+                                except Exception as ex:
+                                    None
+                                    utilities_general.printlogexception(ex=ex)
+                                finally:
+                                    try:
+                                        os.remove('teste.png')
+                                    except:
+                                        None
+                                #utilities_general.printlogexception(ex=ex)
+
             anexosmap = {}
             superscript = ""
             for i in range(0, len(anexosset)-1):
                 anexosmap[anexosset[i]] = i+1
                 if(len(anexosset)>1):
                     superscript = "{{\\hich\\af2\\loch\\super\\b\\fs32\\f2\\loch ({})}}".format(i+1)
-                anexos += superscript + anexosset[i] + "{{\\fs22\\f2, }}{{ }}"                
+                anexos += superscript + "\\\'22" + anexosset[i] + "\\\'22" + "{{\\fs22\\f2, }}{{ }}"                
             if(len(anexosset)>1):
                 superscript = "{{\\hich\\af2\\loch\\super\\b\\fs32\\f2\\loch ({})}}{{\\fs22\\f2}}".format(len(anexosset))
-            anexos += superscript + anexosset[len(anexosset)-1]
+            anexos += superscript + "\\\'22" + anexosset[len(anexosset)-1] + "\\\'22"
             anexosmap[anexosset[len(anexosset)-1]] = len(anexosset)
             docpagina = "{{\\fs22\\f2IMAGENS DO ANEXO {}}}".format(anexos)  
             if(len(anexosset)>1):

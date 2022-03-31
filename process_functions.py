@@ -7,7 +7,7 @@ Created on Tue Feb  1 13:47:47 2022
 
 import time, math, sqlite3, sys, multiprocessing
 import utilities_general, classes_general, global_settings, os
-import fitz, traceback, setproctitle
+import fitz, traceback#, setproctitle
 from queue import PriorityQueue
 
 import multiprocessing as mp
@@ -25,7 +25,7 @@ class Processar():
         self.md = md
         
         
-def logging_process(erros_queue):   
+def logging_proces2s(erros_queue):   
     while True:
         try:
             erro = None
@@ -34,8 +34,8 @@ def logging_process(erros_queue):
             else:
                 time.sleep(0.1)    
             if(erro[0]=='erro'):
-                print(erro)
-                sys.stdout.flush()
+                #print(erro)
+                #sys.stdout.flush()
                 utilities_general.printlogexception(ex=erro[1])
             else:
                 None
@@ -94,8 +94,8 @@ def indexing_thread_func():
                     proc = Processar(idpdf, abs_path_pdf, pdf, init, min(fim, len(doc)), mt, mb, me, md) 
                     global_settings.processar.put(proc)
                 doc.close()
-                insert_content = global_settings.manager.list()
-                
+                #insert_content = [global_settings.manager.list()*global_settings.nthreads]
+                insert_content= global_settings.manager.list()
                 for i in range(global_settings.nthreads):
                     
                     #insertThread(processar, processados, listaRELS, pathdb, inserts, status)
@@ -107,24 +107,25 @@ def indexing_thread_func():
                 cancommit = True
                 for i in range(global_settings.nthreads):
                     global_settings.processing_threads[i].join()
-                if(global_settings.listaRELS[abs_path_pdf].continuar_a_indexar):
+                if(global_settings.listaRELS[abs_path_pdf].continuar_a_indexar and len(insert_content)==global_settings.infoLaudo[abs_path_pdf].len):
+                    sqliteconn = utilities_general.connectDB(str(global_settings.pathdb))
+                    cursor = sqliteconn.cursor()
+                    hashpdf = str(utilities_general.md5(abs_path_pdf))
+                    cursor.custom_execute("UPDATE Anexo_Eletronico_Pdfs set indexado = 1, hash = ? WHERE id_pdf = ?", (hashpdf, idpdf,))
                     print("Indexing processes finalized - saving to database")
-                    sql_insert_content = "INSERT INTO Anexo_Eletronico_Conteudo_id_pdf_" + str(proc.idpdf) +\
+                    sql_insert_content = "INSERT INTO Anexo_Eletronico_Conteudo_id_pdf_" + str(idpdf) +\
                                         " (texto, pagina) VALUES (?,?)"
                     pdfsql = 'Anexo_Eletronico_Conteudo_id_pdf_'+str(idpdf)
                     sql_insert_content2 = "INSERT INTO {}({}) VALUES (?)".format(pdfsql,pdfsql)
                     #insert_content.put('STOP')
                     #insert_contents=dump_queue(insert_content)
-                    sqliteconn = utilities_general.connectDB(str(global_settings.pathdb))
-                    cursor = sqliteconn.cursor()
-                    cursor.custom_executemany(sql_insert_content, insert_content)
-                    cursor.custom_execute(sql_insert_content2, ('rebuild',))
+                    global_settings.processados.put(('saving', abs_path_pdf, idpdf))
                     
-                    hashpdf = str(utilities_general.md5(abs_path_pdf))
-                    cursor.custom_execute("PRAGMA foreign_keys = ON")
-                    cursor.custom_execute("UPDATE Anexo_Eletronico_Pdfs set indexado = 1, hash = ? WHERE id_pdf = ?", (hashpdf, idpdf,))
+                    #for i in range(global_settings.nthreads):
+                    cursor.custom_executemany(sql_insert_content, insert_content)
                     global_settings.infoLaudo[abs_path_pdf].status = 'indexado'
                     sqliteconn.commit()
+                    global_settings.processados.put(('ok', idpdf, abs_path_pdf))
                     print("Indexing processes finalized - saved")
                 else:
                     print("Indexing processes finalized - an error has occured")
@@ -189,7 +190,7 @@ def insertThread(processar, processados, listaRELS, pathdb, inserts):
                 doc2.close()
 
 def backgroundRendererImage(processed_pages, request_queue, response_queue, queuesair, listaRELS, erros_queue):   
-    setproctitle.setproctitle(multiprocessing.current_process().name)
+    #setproctitle.setproctitle(multiprocessing.current_process().name)
 
     docs = {}
     doc = None
@@ -275,7 +276,7 @@ def backgroundRendererImage(processed_pages, request_queue, response_queue, queu
                     None
                     
 def backgroundRendererXML(request_queuexml, response_queuexml, queuesair, listaRELS, erros_queue, listadeobs): 
-    setproctitle.setproctitle(multiprocessing.current_process().name)
+    #setproctitle.setproctitle(multiprocessing.current_process().name)
     docs = {}
     doc = None
     pathatual = None
@@ -341,7 +342,8 @@ def backgroundRendererXML(request_queuexml, response_queuexml, queuesair, listaR
 
                 response_queuexml.put(respostaPagina) 
         except Exception as ex:
-            erros_queue.put(('2', traceback.format_exc()))
+            None
+            #erros_queue.put(('info', traceback.format_exc()))
         finally:
             for abs_path_pdf in listaRELS.keys():
                 try:
@@ -462,12 +464,12 @@ def checkSearchQueue(searchqueue, listaTERMOS, result_queue, pedidos, pedidos_to
         #    result_queue.put(res)  
     except Exception as ex:
         None
-        exc_type, exc_value, exc_tb = sys.exc_info()
-        erros_queue.put(('2', str(exc_type) + "\n" + str(exc_value)+ "\n" + str(exc_tb)))
+        #exc_type, exc_value, exc_tb = sys.exc_info()
+        erros_queue.put(('2', traceback.format_exc()))
         #erros_queue.put(('2', ex))  
         
 def searchProcess(result_queue, pathdb, erros_queue, queuesair, searchqueue, update_queue, listaRELS, listaTERMOS, estavel=False):  
-    setproctitle.setproctitle(multiprocessing.current_process().name)
+    #setproctitle.setproctitle(multiprocessing.current_process().name)
     historicoDeParsing = {}
     pedidos = PriorityQueue()
     while(True): 
@@ -560,11 +562,10 @@ def searchProcess(result_queue, pathdb, erros_queue, queuesair, searchqueue, upd
                                         break
                                     
                                 else:
-                                    #erros_queue.put(('2', (termo, tipobusca)))
                                     retorno_sqlite_search = utilities_general.searchsqlite(tipobusca, termo, abs_path_pdf, pathdb, idpdf, queuesair=queuesair, idtermo=str(idtermo), \
                                                                                     idtermopdf=str(idtermopdf), \
                                                                  erros_queue = erros_queue, fixo = 1, result_queue = result_queue, \
-                                                                     sqliteconnx=None, tocs_pdf=tocs_pdf[abs_path_pdf])
+                                                                     sqliteconnx=None, tocs_pdf=tocs_pdf[abs_path_pdf], listaTERMOS=listaTERMOS)
                                     search_results = retorno_sqlite_search[0]
                                     resultadosx = retorno_sqlite_search[1]
                                     
@@ -597,26 +598,30 @@ def searchProcess(result_queue, pathdb, erros_queue, queuesair, searchqueue, upd
                                     sqliteconn.commit()
                                 listaTERMOS[(termo.upper(),tipobusca)] = [termo,tipobusca, idtermo, pesquisadoadd]
                                 pesquisadoadd = ""
-                           
+                        except classes_general.TimeLimitExecuteException as ex:
+                            erros_queue.put(('3', termo, tipobusca, idtermo, "Ocorreu um erro inesperado e a operação não foi concluída.\n{}".format("Tempo limite de execução excedido.")) ) 
                             
                         except Exception as ex:
-                            erros_queue.put(('2', traceback.format_exc()))
+                            erros_queue.put(('3', termo, tipobusca, idtermo, traceback.format_exc()))
                             #erros_queue.put(('2', ex))
                         finally:
                             if(sqliteconn):
                                 sqliteconn.close()
-                    
+                
                 except sqlite3.Error as ex:
                     None
+                    erros_queue.put(('2', traceback.format_exc()))
                     #exc_type, exc_value, exc_tb = sys.exc_info()
                     #erros_queue.put(('2', str(exc_type) + "\n" + str(exc_value)+ "\n" + str(exc_tb)))
                 except sqlite3.OperationalError as ex:
                     None
+                    erros_queue.put(('2', traceback.format_exc()))
                     #exc_type, exc_value, exc_tb = sys.exc_info()
                     #erros_queue.put(('2', str(exc_type) + "\n" + str(exc_value)+ "\n" + str(exc_tb)))
                     time.sleep(1)
                 except Exception as ex:
-                    utilities_general.printlogexception(ex=ex) 
+                    erros_queue.put(('2', traceback.format_exc()))
+                    #utilities_general.printlogexception(ex=ex) 
                 finally:
                     try:
                         cursor.close() 

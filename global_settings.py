@@ -24,6 +24,11 @@ def Manager():
     m.start()
     return m
 
+def clear_log_window():
+    log_window_text.delete('1.0', 'end')
+    if(label_warning_error!=None):
+        label_warning_error.config(bg="#%02x%02x%02x" % (145, 145, 145))
+
 def initiate_variables():
     global processes, searchprocesses, expertmode, lockmanipulation, env
     global Font_tuple_Arial_8, Font_tuple_Arial_10, Font_tuple_Arial_12, Font_tuple_ArialBold_8, \
@@ -31,19 +36,28 @@ def initiate_variables():
     global Font_tuple_Arial_8_italic, Font_tuple_Arial_10_italic, Font_tuple_ArialBoldUnderline_10, Font_tuple_ArialBoldUnderline_12
             
     
-    global infoLaudo, pathpdfatual, zoom, version, root, minMaxLabels, exitFlag, divididoEm, realce, posicaoZoom
-    global continuar, listaRELS, listaTERMOS, queuesair, request_queue, request_queuexml, response_queue, response_queuexml
-    global erros_queue, searchqueue, result_queue, update_queue, db_queue
-    global warningimage, loadingimage, processing, showbookmarksi, imselect, imdrag, loading, imareaselect
+    global infoLaudo, pathpdfatual, version, root, minMaxLabels, exitFlag, divididoEm, realce, posicaoZoom, imagedontapply, imageapply
+    global continuar, listaRELS, listaTERMOS, queuesair, request_queue, request_queuexml, response_queue, response_queuexml, zoom
+    global erros_queue, searchqueue, result_queue, update_queue, db_queue, regex_result_list, equipments, selectall, unselectall
+    global warningimage, loadingimage, processing, showbookmarksi, imselect, imdrag, loading, imareaselect, filter_window_searches
     global imFP, imPP, imPP10, imNP, imNP10, imLP, printeri, im2, im, icon, p0x, p1x, p0y, p1y, contador_buscas_incr
-    global downhiti, uphiti, reportsicon, defaultimage, aboutimage, helpimage, commenticon, repicon, searchicon
-    global imprevfind, showhide, imnextfind, imfromFile, imtoFile, copyrestoblip, querysqlim, imageequip
+    global downhiti, uphiti, reportsicon, defaultimage, aboutimage, helpimage, commenticon, repicon, searchicon, idtermopdfs
+    global imprevfind, showhide, imnextfind, imfromFile, imtoFile, copyrestoblip, querysqlim, imageequip, filterimage
     global imagereportb, collapseimg, movecat, movecattop, movecatdown, movecatup, checki, itemimage, catimage, documents_to_index
     global delcat, addcat, copycat, childpornb, gunb, drugb, violenceb, corruptionb, textb, sync, manager, indexingwindow
     global tkphotologo, tkphotologo2, withnote, withoutnote, editcat, lupa, resultdoc, snippet, processar, processados, paginasindexadas, fera_main_window
     global listaZooms, searchResultsDict, pathdb, splash_window, indexing, exit_flag, dbversion, recenttxt, indexing_thread, nthreads, docatual
     global movecatbottom, movecattop, processing_threads, logging_process, askformargins, default_margin_top, default_margin_bottom, default_margin_left, default_margin_right
-    global orderazdown, orderazup, ordernumberdown, ordernumberup, ordergenericup, ordergenericdown
+    global orderazdown, orderazup, ordernumberdown, ordernumberup, ordergenericup, ordergenericdown, listavidformats, log_window, log_window_text, label_warning_error, send_vacuum
+    send_vacuum = False
+    filter_window_searches = None
+    detached_pdfs = {}
+    log_window = None
+    equipments= {}
+    idtermopdfs = {}
+    log_window_text = None
+    listavidformats = [".webm", ".mkv", ".flv", ".flv", ".vob", ".ogv", ".ogg", ".avi",\
+                ".mts", ".ts", ".mov", ".qt", ".yuv", ".rm", ".rmvb", ".asf", ".mp4", ".m4p", ".m4v", ".mpg", ".mpeg", ".mpg", ".3gp", ".flv"]
     docatual = None
     askformargins = True
     recenttxt = os.path.join(os.getcwd(),"recents.txt")
@@ -68,8 +82,8 @@ def initiate_variables():
     p1x = None
     p0y = None  
     p1y = None
-    dbversion = "1.0"
-    version = 'v3.00-23022022-BETA'
+    dbversion = "1.3"
+    version = 'v3.07-23032022'
     env = None
     expertmode = True
     lockmanipulation = False
@@ -79,6 +93,25 @@ def initiate_variables():
     printorlog = 'print'
     paginasindexadas = 0
     root = tkinter.Tk()
+    
+    #initiate window log
+    log_window = tkinter.Toplevel()
+    log_window.withdraw()
+    log_window.protocol("WM_DELETE_WINDOW", lambda: log_window.withdraw())
+    log_window.geometry('800x500')
+    log_window.rowconfigure(0, weight=1)
+    log_window.columnconfigure(0, weight=1)
+    log_window_text = tkinter.Text(log_window)
+    log_window_text.grid(row=0, column=0, sticky='nsew')
+    log_window_clearbutton = tkinter.Button(log_window, text="Limpar", command=clear_log_window)
+    log_window_clearbutton.grid(row=1, column=0, sticky='ns', pady = 10)
+    log_window_scrollbar = tkinter.Scrollbar(log_window)
+    log_window_scrollbar.grid(row=0, column=1, sticky='ns')
+    log_window_text.config(yscrollcommand=log_window_scrollbar.set)
+    log_window_scrollbar.config(command=log_window_text.yview)
+    label_warning_error = None
+    root.bind('<Control-Shift-L>', lambda e: log_window.deiconify())
+    zoom = None
     icon = b'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'
     
     root.attributes("-alpha", 0)
@@ -92,6 +125,7 @@ def initiate_variables():
     root.withdraw()     
     root.columnconfigure(0, weight=1)
     root.rowconfigure(0, weight=1)
+    
     Font_tuple_Arial_8 = tkfont.Font(family ="Helvetica", size=9)
     Font_tuple_Arial_10 = tkfont.Font(family ="Helvetica", size=10)
     Font_tuple_Arial_8_italic = tkfont.Font(family ="Helvetica", size=9, slant="italic")
@@ -111,10 +145,11 @@ def initiate_variables():
     continuar = True    
     divididoEm = 1    
     realce = None    
-    posicaoZoom = 0    
+    #posicaoZoom = 0    
     splash_window = None
     manager = Manager()
     listaRELS = manager.dict()
+    regex_result_list = manager.list()
     indexing = False
     infoLaudo = {}
     listaTERMOS = manager.dict()  
@@ -134,12 +169,18 @@ def initiate_variables():
     result_queue = manager.PriorityQueue()
     update_queue = mp.Queue()
     db_queue = queue.Queue()
+    selectallb = b'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAASNJREFUWEft1jFKxUAQxvHfu4J6ASsFDyBoLVgIHuBhbWWjIHoBwUrFxgPoQz2CHkUQD6AIljbKgoElRPJ2yRII2SaQzOz8M/Ox+03wgQVpK+QspaU0R0/wg/BMWTk5jfuPACkdWMM5djLH1jqCY9zgqyEyFH/CIR5qAFPcpggoin2JO3CBdWzXIKriR7j/Sy4iwgBziU1s4ROreMYJ7iLyIgBh/wBxhQ0c4BGnDS2OAeYdwTdW8BaPq0mE4d019rEXtT3OK9aBqkiAWMbrP+IqDtAm6mEBvGOx7Zdr3zu9jBJrdxueegt2Wz3jGh4mwOiIcg6VnJxWP5AisF4Agi84w+7oiEp1YPCOKBZ5cFGzyoLVFT06onnOg17OgWKmtFdH9AuTFWbVzoQk1wAAAABJRU5ErkJggg=='
+    unselectallb = b'iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAANZJREFUSEvl1jFqQkEQxvHfq6wUPIEptE5lH1N4h7SewMLKyiJdutzCJjcQSUqxsPMCaVNYCIKF8hBBeeCuC0+CDmy13+x/Z2Zn2Ay/WLpsdYzxEdAVtjNM0Qk4viBfo7sAPKEZGck6JUVdvEYCVimAyLMPshRAD28XKO/4Pu6nAEqP4GrAAoOA1zOqqX0wRC3iWl+YRejOJHkNSrWbAPqoRIQxwTxCV0hR6UV+vGkaGhWnNfj7l6MiH9XtwGva4ROblAgaaAUAW/xglwK4qhVuAij127IHBUI6c9iLBWoAAAAASUVORK5CYII='
+    selectall = tkinter.PhotoImage(data=selectallb)
+    unselectall = tkinter.PhotoImage(data=unselectallb)
+    filterimageb = b'iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAAVRJREFUSEu1lD1Ow0AQhd+AkbgAUIA4AZQcAJAgdioKcwQcCq5D7Fxh+elsBykVLSVF+iDxc4WsPdEqEGwTvLsYb7dr7/v2jWYeoeVFLetjAeicBx4xDQjYbgh9YaaL5KafKJ0FwPN7EwA7DcXn13OexLfRbhXA6iAWYaOyeX6vpFN00DYgmALkSImth/vw4y+lOjnrbToO3gGWsYjWSiVy/SAl0CmDnzNJx7YQJb7q8IhAezkoTUXfrQCuNgjTEYB9AOMsy4+Gd4NXEyeuX74LrBzG4vqtBFCb6o8mkDrxHwBbiE58KcAUYiL+K0AHMRWvBaiPxc5g8DARUWcON+847dQu623PN58ZLUC9uDr+1X1dK1sDvh2Z5ZYVQMXI17QCeIpFeKAbRCuAihEVBTZxYgX4fO24GAX/7sA2CI0cdP3LRwavS4mubcoaAXRlaNymTQAz84TxGVzW2JwAAAAASUVORK5CYII='
     orderazdownb = b'iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAABPUlEQVRIieWUP0oDQRjF18LCRi8QGN7vGxZs0uwRbALamBvYhBxATMDGMlews7QRvIOlq2ITb2CRRrDyD6w2uzAsmzAhY+WDV8zy8X7fPJbJskBmNgLK7K8UAwDKLicDmNkoNHAHvCUDhAIOgE/gKDlAkgMWks5jF4oG9Hq9HaCUdJtl2VZygKQr4MV7vxsdHguQdAq8O+f21wqPBQDfwJOky9DJAO3g5ICN9H8AeZ7TvEF5npMcAEzNbG5mc2CSHCDp0czOgMlalcYA6noq77055wRUZuaTAYApcB+cy5U1AbNlAEl9MztuzT8APy0vXwr4Ai7aAEl9YAGcNLPee6srGZhZUXsAVEv/JmDYQBpAEH5TFMV2MDvu2rauabzqFg3kGXjtCg9m92K+dUEOgY+6087wjQUMJV2nDP8FDNeWH0s/W/oAAAAASUVORK5CYII='
     orderazupb = b'iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAABUUlEQVRIieXUsUoDQRDG8UshgiCkSCxS7fxn2HRCvIdIrW9gkzyAZRCu01fwAWwEsbELVrYBtbASWwOCSZ8I2mThOJLLxWznwMDdcfv9uOF2kyRXwAlwZ2a7SexahM+AH+A+KpILfwE+gE/gNk3TneK7InK1rKuEZ6raA0YicrgKKQYDT8C8DJgBWZIkSQAWQQE5LVnrgamInJUBWbjOAwFR1eNl69rt9j7wClyvDC9WESipmqreAM+tVmsvOqCq58CX957K4VUB51wXmDnnuhuFVwWAKfCoqr18xwRGyzoasFX9H8DMmuGo8N43ogOq2gfGwLjyH7QJADwAF8AlMIwKeO8bwNzMjlQ1Bb5V9SAaoKp9EXkP98Bb7I02BCa5TTapPKZ1gJk1gbmIDMIRISKDxciaWwO58dQKX1VtTOsA51zdzDrF52bWcc7Vtwb+Ur//XZa7TzC8LAAAAABJRU5ErkJggg=='
     ordernumberdownb = b'iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAvUlEQVRIie3UIQ7CQBSE4RoOMv/4mj0GiuoaTM+BqOAK3ADTm9RwCQQnIJhi2mTTtAnQrSDwkpE73+6Kl2XR2K6ANltrXgGAdiopgc52bbvqUwNdaiBEZ0JyQFJpO9gOksrkwFSSARNn0n7R6oCkUxygWRUYkgxYNL8B/HfRFwLAcQ6QlNveLQUewGEMSMqBG7BfChQDMgBReRNC2IwBoHlrF0XIBbjOlfcv+2wXAVvgPtxwqnzxAIWkc8ryJ/IKpNezywMHAAAAAElFTkSuQmCC'
     ordernumberupb = b'iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAx0lEQVRIie3UsQ3CMBCFYTeIOe6/1DSeBGoamsyRIkswRETDGGlYgoIR0oQmRpblACGHhBROeoUl6z6fLJ1zUQE74FQUxdpZ19C8A3rgbIpEzS/AFbgBjfd+ld4VkWMu7zSvVLUEWhHZjCHDhE1oDDRA/wzogMo55wIwvDQghxRQVR/OqupfAVV0+QEERFW3s4C4UmDkQX0uZoCq+jgisjcFcqD1BGWS2voP2lzMgFm1DGDyLpoKTN5FnwBfXxV/4CeAejm76A67BqV0goeW0gAAAABJRU5ErkJggg=='
     ordergenericdownb = b'iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAmUlEQVRIie3TsQ3CMBCFYTfMYd1/FU0aj5Eq2YAmc1BmFBo2ScMSFMkCiAYaR7KQsJDOpImfdO377opzLomqDsDk/pUKVGAbAJhyo6qdCVDVITfe+6MJMKUCFdgrAIzfABFpsq//I/AEzp+AiDTADJysQAs8gHEFYvkCXEMIBxMQkT5ecgPucfMy5QmyXvIqXp4gvYhcSpa/AUdjWDfP8ZtHAAAAAElFTkSuQmCC'
     ordergenericupb = b'iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAsUlEQVRIie3VPQoCMRCG4WnEY4S8k2Ybm5zEvYHNXsO9i7XYeIxtvIE2CvY2NtokMFgIkgj+7AeBMMU8mRSJiAnQApsQwlRqJzW/AjdgWxUxzXfAETgD6xjjpGbzpap2wOCca4BTlUlS815EJAMiIt77WZpkUQr0eW+BjKjqvAiweQSqZwRGoPxA/wGoapcXsAIOtuaca4oAYDBrD1xs7enT8hFX9FtA+pjatwEv5yuBO7yaZfPtKzdJAAAAAElFTkSuQmCC'
+    filterimage = tkinter.PhotoImage(data=filterimageb)
     orderazdown = tkinter.PhotoImage(data=orderazdownb)
     orderazup = tkinter.PhotoImage(data=orderazupb)
     ordernumberdown = tkinter.PhotoImage(data=ordernumberdownb)
@@ -277,15 +318,19 @@ def initiate_variables():
     snippet = tkinter.PhotoImage(data=snippetb)
     listaZooms = [1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.0]
     searchResultsDict = {}
- 
-    
- 
+    imageapplyb = b'iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAAXNSR0IArs4c6QAAA8hJREFUSEvtlWtMW2UYx//ncOjl9LLSC7fJYGU6soW4lG6GjvXgMFCcWVTMxArswzTGL8bMTP0ghrAs8baYDZx1Clu2LpqQ4bhsqFvmbbHSwhiUizJ6pFc6bp3lUrC0NZCMrTMw3OSb79fnzf/35v/+n+chsMqHWGV9/A9YdJg2QC31KA6DE9a73hlz3yr8JxbRnyNrw1CG+XhJLXmg7vWudqe5cLoannnIAwPoGqiVnodbq4o+Jc93NSF300489+Ez3WQwXDD9FTwPBKA/g2q9N918dI8hptl6DlbvNfxib8VB3UFUVFd2TRAB5r4B9DFkpY0qzVXFBrKxrx7d450weUwI84AcsQa9F9gej8+bEwWQnIAk5Ij9gKuEYbQ0eHWpHpkXXzeWZq4uMZBN7Fn0+K1oHf0VsQIKIq8Ec6ZYG4G/GFfdmPs2oAYi2Ti36ZvSH5my+mK3gzu4a2ofOu+GrDkFdfLQ+taqF4+Rza5z+H2iDx0+C3hCLsjrHLiaRwcohJnpi3d8svx9iERI+Lr2hdN5vDke1imUUH+R6ZhR+J7ylcB6C5J0llbJ7WstR/SfkC1DjWCnrqNrogN8AQ/B3ggG6t0sFRNmAi1w3Y5pBcTZdFbD/t37c2VcBW7MekGQBLYna7H9tMo1mzBbeOPZye7UxjUqiT3JcrS4mvxu5DwGZ1j0TlnBF/Ix2T6LvnqWpQRhbaAOiz2wEFPe21DukOaa41VxsnTZBmRKtsAf8i8E+IlEHbKPqDyp6pQyqSvh2zeffivm+/GLcAb/QP/MbwviN69OoqOuj6VSwtrAx9Hii32w7b1HCxRUonEkwy7fnJwJTRyDCBFGiAxBJ9uNV4wvo1JfiUu+C/CEnGCDA6AFfIx0/gnLl9dsAk2IGXv1n+JRjZb6hqKQy6GNknye9KH4FDwmyoGIEiNEziFbvAOX/C0YjngxGLKB5vMxbLsJU00bK84nGHdRYNHzu0MRFVPBAeiEPLFxS9FmGS3l4xHOJiRx1iJMhDACL5wROwR8Gi7HMEzH29iUoiRtp6Y/yvNlAfNFwUcoEE5IzjClGhkvkYI0IoeQEmGY8ILm0mBZJ0y17WxmWYb28kbTsuJLzqL4k9x8yiky6l7aqZAkihCJAHGEBD2D/bhywmzLe20rc0refE/xZYddeoNCF+yPMZbsK5Yp49LQ5ujA5ZNXWP27TzIVRNWSnt/TojsvbP15o85vCZ15PE8r/aHhJ7ayvFy7h9i7opeveB8U9G7b1WN0lu89pH/+EHHY/m93+H1P05WCVh3wN4/pa9hivJ1OAAAAAElFTkSuQmCC'  
+    imageapply = tkinter.PhotoImage(data=imageapplyb)
+    imagedontapplyb = b'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'
+    imagedontapply = tkinter.PhotoImage(data=imagedontapplyb)
 def initiate_search_process():   
     global  processes, uniquesearchprocess
     if('BUSCA' not in processes):
+        for key_in_listaRELS in listaRELS.keys():
+            print(key_in_listaRELS)
         print("Starting search process!")
         uniquesearchprocess = mp.Process(target=process_functions.searchProcess, name="FERA SEARCH Process", args=(result_queue, pathdb, erros_queue,\
-                                                                     queuesair, searchqueue, update_queue, listaRELS, listaTERMOS, True,), daemon=True)
+                                                                     queuesair, searchqueue, update_queue, listaRELS, listaTERMOS, True,),\
+                                         daemon=True)
         processes['BUSCA'] = uniquesearchprocess
         uniquesearchprocess.start() 
     
@@ -396,30 +441,34 @@ def on_quit():
             selectpdf = ("SELECT P.id_pdf, P.rel_path_pdf FROM Anexo_Eletronico_Pdfs P")
             cursor.custom_execute(selectpdf)
             allpdfs = cursor.fetchall()
-            selectconfigzoom = "SELECT * FROM FERA_CONFIG WHERE config = ?"
-            cursor.custom_execute(selectconfigzoom, ('zoom',))
-            configzoom = cursor.fetchone()
+            #selectconfigzoom = "SELECT * FROM FERA_CONFIG WHERE config = ?"
+            #cursor.custom_execute(selectconfigzoom, ('zoom',))
+            #configzoom = cursor.fetchone()
            
             for pdf in allpdfs:
-                progressindex['value'] += 1
                 pathpdf = utilities_general.get_normalized_path(os.path.join(pathdb.parent, pdf[1]))
-                cursor.custom_execute("UPDATE Anexo_Eletronico_Pdfs set lastpos = ? WHERE id_pdf = ?", (infoLaudo[pathpdf].ultimaPosicao, pdf[0],))
-                progressindex.update_idletasks()        
-            if(configzoom==None or configzoom==''):
-                insertzoom = "INSERT INTO FERA_CONFIG (config, param) values (?,?)"
-                print("zoom: ", posicaoZoom)
-                cursor.custom_execute(insertzoom, ('zoom', posicaoZoom,))
-            else:
-                cursor.custom_execute("UPDATE FERA_CONFIG set param = ? WHERE config = ?", (posicaoZoom, 'zoom',))
-                print("zoom: ", posicaoZoom)
+                if(infoLaudo[pathpdf].something_changed):
+                    progressindex['value'] += 1                    
+                    cursor.custom_execute("UPDATE Anexo_Eletronico_Pdfs set lastpos = ?, zoom_pos = ? WHERE id_pdf = ?", (infoLaudo[pathpdf].ultimaPosicao,\
+                                                                                                                          infoLaudo[pathpdf].zoom_pos, pdf[0],))
+                    progressindex.update_idletasks()        
+            #if(configzoom==None or configzoom==''):
+            #    insertzoom = "INSERT INTO FERA_CONFIG (config, param) values (?,?)"
+            #    print("zoom: ", posicaoZoom)
+            #    cursor.custom_execute(insertzoom, ('zoom', posicaoZoom,))
+            #else:
+            #    cursor.custom_execute("UPDATE FERA_CONFIG set param = ? WHERE config = ?", (posicaoZoom, 'zoom',))
+            #    print("zoom: ", posicaoZoom)
             getobscatas =  fera_main_window.treeviewObs.get_children('')
             for obscat in getobscatas:
                 progressindex['value'] += 1
                 updateinto2 = "UPDATE Anexo_Eletronico_Obscat set ordem = ? WHERE id_obscat = ?"
                 id_obscat = fera_main_window.treeviewObs.item(obscat, 'values')[1]
                 cursor.custom_execute(updateinto2, (fera_main_window.treeviewObs.index(obscat), id_obscat,))   
-                progressindex.update_idletasks()
+                progressindex.update_idletasks()            
             sqliteconn.commit()
+            if(send_vacuum):
+                cursor.custom_execute('vacuum;')   
             root.update_idletasks()
         except Exception as ex:
             utilities_general.printlogexception(ex=ex)

@@ -18,15 +18,39 @@ from functools import partial
 import threading
 plt = platform.system()
 
+class TimeLimitExecuteException(Exception):
+    pass
+
+class FFMPEGException(Exception):
+    pass
+
 class Custom_Cursor(sqlite3.Cursor):
-    def custom_execute(self, command, arguments=None, raise_ex=True, show_popup=True):
-        #print(command, arguments)
+    def execute_with_timeout(self, command, arguments):
         try:
             if(arguments==None):
-                
                 self.execute(command)
             else:
                 self.execute(command, arguments)
+        except sqlite3.OperationalError as ex:
+            raise TimeLimitExecuteException()
+    def custom_execute(self, command, arguments=None, raise_ex=True, show_popup=True, timeout=0):
+        
+        try:
+            if(timeout!=0):
+                execute_thread = threading.Thread(target=self.execute_with_timeout, args=(command, arguments,), daemon=True)
+                execute_thread.start()
+                execute_thread.join(timeout)
+                if(execute_thread.isAlive()):
+                    #erros_queue.put(('2', 'traceback.format_exc'))
+                    raise TimeLimitExecuteException()
+                
+                    
+            elif(arguments==None):
+                self.execute(command)
+            else:
+                self.execute(command, arguments)
+        except TimeLimitExecuteException as ex:
+            raise
         except sqlite3.OperationalError as ex:
             if(show_popup):
                 utilities_general.popup_window("Ocorreu um erro inesperado e a operação não foi concluída. \nTente novamente em alguns segundos.\n{}".format(ex), False)
@@ -37,16 +61,27 @@ class Custom_Cursor(sqlite3.Cursor):
                 utilities_general.popup_window("Ocorreu um erro inesperado e a operação não foi concluída. \nTente novamente em alguns segundos.\n{}".format(ex), False)
             if(raise_ex):
                 raise ex
-    def custom_executemany(self, command, arguments=None, raise_ex=True):
+    def custom_executemany(self, command, arguments=None, raise_ex=True, show_popup=True, timeout=0):
         try:
-            if(arguments==None):
+            if(timeout!=0):
+                execute_thread = threading.Thread(target=self.execute_with_timeout, args=(command, arguments,), daemon=True)
+                execute_thread.start()
+                execute_thread.join(timeout)
+                if(execute_thread.isAlive()):
+                    raise TimeLimitExecuteException()
+            elif(arguments==None):
                 self.executemany(command)
             else:
                 self.executemany(command, arguments)
         except sqlite3.OperationalError as ex:
-            if(raise_ex):
+            if(show_popup):
                 utilities_general.popup_window("Ocorreu um erro inesperado e a operação não foi concluída. \nTente novamente em alguns segundos.\n{}".format(ex), False)
-                #utilities_general.printlogexception(ex)
+            if(raise_ex):
+                raise ex
+        except sqlite3.DatabaseError as ex:
+            if(show_popup):
+                utilities_general.popup_window("Ocorreu um erro inesperado e a operação não foi concluída. \nTente novamente em alguns segundos.\n{}".format(ex), False)
+            if(raise_ex):
                 raise ex
                 
         
@@ -196,7 +231,104 @@ class Ask_for_margins():
                 doc.close()
             except:
                 None
-                
+
+class Filter_Window():
+    def close(self):
+        self.window.withdraw()
+        
+    def select(self, todos=False):
+        for key in self.intvars.keys():
+            if(todos):
+                self.intvars[key][0].set(1)
+            else:
+                self.intvars[key][0].set(0)
+    def apply(self):
+        pdfs_to_filter_out = []
+        for key in self.intvars.keys():
+            intvar = self.intvars[key][0]
+            if(intvar.get()==0):
+               idpdf1 = self.intvars[key][1] 
+               pdfs_to_filter_out.append(idpdf1)
+        #termos = self.treeview_to_filter.get_children('')
+        for termo in global_settings.listaTERMOS.keys():
+            soma = 0
+            idtermo = global_settings.listaTERMOS[termo][2]
+            idtermo_item = "t"+str(idtermo)
+            pdfs = sorted(global_settings.idtermopdfs[idtermo_item].keys(), key=lambda x: x[1])
+            index_insert = 0
+            for pdf in pdfs:
+                idpdf2 = self.treeview_to_filter.item(pdf[0], 'values')[1]
+                texto = self.treeview_to_filter.item(pdf[0], 'text')
+                if(idpdf2 in pdfs_to_filter_out):
+                    self.treeview_to_filter.detach(pdf[0])
+                else:      
+                    #print(pdf, index_insert)                               
+                    self.treeview_to_filter.move(pdf[0], idtermo_item, index_insert)
+                    index_insert += 1 
+                    soma += int(self.treeview_to_filter.item(pdf[0], 'values')[2])
+            valores = self.treeview_to_filter.item(idtermo_item, 'values')
+            self.treeview_to_filter.item(idtermo_item, text = valores[3] + ' (' + str(soma) + ')'  + " - "+valores[4])
+            index_insert = utilities_general.insertIndex(self.treeview_to_filter, '', valores[3], index=0)
+            self.treeview_to_filter.move(idtermo_item, '', index_insert)
+            if(soma==0 and self.ferawindow.hideresultsvar.get()):
+                self.treeview_to_filter.detach(idtermo_item)
+            
+        self.window.withdraw()
+    def __init__(self, treeview, treeview_to_filter, ferawindow):
+        if(global_settings.filter_window_searches!=None):
+            self.window = global_settings.filter_window_searches 
+        if(global_settings.filter_window_searches==None):
+            self.treeview = treeview
+            self.treeview_to_filter = treeview_to_filter
+            self.ferawindow = ferawindow
+            self.window = tkinter.Toplevel(global_settings.root)
+            global_settings.filter_window_searches  = self.window 
+            self.window.protocol("WM_DELETE_WINDOW", lambda: self.close())
+            self.window.rowconfigure(1, weight=1)
+            self.window.columnconfigure((0,1), weight=1)
+            
+            self.botaoselectall = tkinter.Button(self.window, image = global_settings.selectall, compound='left', text="Marcar Todos", \
+                                              command= lambda: self.select(True))
+            self.botaoselectall.grid(row=0, column=0, sticky='ns', pady=5, padx=5)
+            
+            self.botaounselectall = tkinter.Button(self.window, image = global_settings.unselectall, compound='left', text="Desmarcar Todos", \
+                                              command=lambda: self.select(False))
+            self.botaounselectall.grid(row=0, column=1, sticky='ns', pady=5)
+            
+            
+            self.check_docs_frame = tkinter.Frame(self.window, borderwidth=2)
+            self.check_docs_frame.grid(row=1, column=0, columnspan=2, sticky='nsew', pady=15)
+            row = 0
+            children1 = treeview.get_children('')
+            self.intvars = {}
+            for eq in children1:
+                eqtext = treeview.item(eq, 'text')
+                eqlabel = tkinter.Label(self.check_docs_frame, font=global_settings.Font_tuple_ArialBold_12, text=eqtext)
+                eqlabel.grid(row=row, column=0, sticky='w', pady=5)
+                children2 = treeview.get_children(eq)
+                row += 1
+                for child in children2:
+                    docu = treeview.item(child, 'text')
+                    idpdf = treeview.item(child, 'values')[2]
+                    self.intvars[docu] = [tkinter.IntVar(), idpdf]
+                    self.intvars[docu][0].set(1)
+                    chk = tkinter.Checkbutton(self.check_docs_frame, text=docu, variable=self.intvars[docu][0], offvalue=0, onvalue=1)
+                    chk.grid(row=row, column=0, sticky='w', pady=1)
+                    row += 1
+                    
+            self.botaoapply = tkinter.Button(self.window, image = global_settings.imageapply, compound='left', text="Aplicar", \
+                                              command=self.apply)
+            self.botaoapply.grid(row=2, column=0, sticky='ns', pady=5)
+            
+            self.botaoclose = tkinter.Button(self.window, image = global_settings.imagedontapply, compound='left', text="Fechar", \
+                                              command=self.close)
+            self.botaoclose.grid(row=2, column=1, sticky='ns', pady=5)
+        else:
+            #print(teste)
+            self.window.deiconify()
+            global_settings.root.after(1, lambda:self.window.lift())
+        
+        
                 
 class Annotation_Window():
     def __init__(self, observation, annotations, feraapp):
@@ -501,7 +633,7 @@ class Annotation_Window():
 
 class Document_Margin():
     
-    def popupcomandook(self, ):
+    def popupcomandook(self):
         self.marginsok = True
         self.mt = self.datatop.get()
         self.mb = self.databottom.get()
@@ -609,9 +741,9 @@ class Document_Margin():
         self.save_default_margins_check = ttk.Checkbutton(self.bottomframe,text='Salvar configurações de margem', variable=self.save_default_margins_var)
         self.save_default_margins_check.grid(row=0, column=0, sticky='w', padx=5)
         self.button_ok = tkinter.Button(self.bottomframe, text="OK", font=global_settings.Font_tuple_Arial_8, command= \
-                                        lambda : self.popupcomandook(self.window, self.datatop, self.databottom, self.dataleft, self.dataright))
+                                        lambda : self.popupcomandook())
         self.button_ok.grid(row=1, column=0, sticky='ns', pady=5)
-        self.button_cancel = tkinter.Button(self.bottomframe, text="Cancelar", font=global_settings.Font_tuple_Arial_8, command= lambda : self.popupcomandocancel(self.window))
+        self.button_cancel = tkinter.Button(self.bottomframe, text="Cancelar", font=global_settings.Font_tuple_Arial_8, command= lambda : self.popupcomandocancel())
         self.button_cancel.grid(row=1, column=1, sticky='ns', pady=5)
         
         self.mmtopxtop = math.floor(self.datatop.get()/25.4*72)
@@ -626,14 +758,10 @@ class Document_Margin():
         
         self.margemimg = [self.create_rectanglex(self.x0k, self.y0k, self.x1k, self.y1k, (21, 71, 150, 85))]
         self.margempreimage = [self.fotocanvas.create_image(self.x0k, self.y0k, image=self.margemimg[0], anchor='nw', tags=("margem"))]
-        self.dataleft.trace_add("write", lambda *args: self.checkmargin(self.fotocanvas, self.prop, self.datatop, self.databottom, self.dataleft, \
-                                                                   self.dataright, self.button_ok, self.pixorg, self.margemimg, self.margempreimage))
-        self.databottom.trace_add("write", lambda *args : self.checkmargin(self.fotocanvas, self.prop, self.datatop, self.databottom, \
-                                                                      self.dataleft, self.dataright, self.button_ok, self.pixorg, self.margemimg, self.margempreimage))
-        self.datatop.trace_add("write", lambda *args : self.checkmargin(self.fotocanvas, self.prop, self.datatop, self.databottom, self.dataleft, \
-                                                                   self.dataright, self.button_ok, self.pixorg, self.margemimg, self.margempreimage))
-        self.dataright.trace_add("write", lambda *args : self.checkmargin(self.fotocanvas, self.prop, self.datatop, self.databottom, self.dataleft, \
-                                                                     self.dataright, self.button_ok, self.pixorg, self.margemimg, self.margempreimage))
+        self.dataleft.trace_add("write", lambda *args: self.checkmargin())
+        self.databottom.trace_add("write", lambda *args : self.checkmargin())
+        self.datatop.trace_add("write", lambda *args : self.checkmargin())
+        self.dataright.trace_add("write", lambda *args : self.checkmargin())
         global_settings.root.wait_window(self.window)
         
 
@@ -760,6 +888,9 @@ class Relatorio():
         self.paginasindexadas = 0
         self.hash = ''
         self.status = ''
+        self.parent_alias = ""
+        self.zoom_pos = 0
+        self.something_changed = False
         
 class RespostaDePaginaXML():
     def __init__(self):
@@ -813,7 +944,7 @@ class ExternalLink():
         self.imagem = imagem
 
 class Observation():
-    def __init__(self, paginainit, paginafim, p0x, p0y, p1x, p1y, tipo, pathpdf, idobs, idobscat, conteudo, annotations):
+    def __init__(self, paginainit, paginafim, p0x, p0y, p1x, p1y, tipo, pathpdf, idobs, idobscat, conteudo, annotations, withalt=False):
         self.paginainit = paginainit
         self.paginafim = paginafim
         self.p0x = p0x
@@ -826,6 +957,7 @@ class Observation():
         self.conteudo = conteudo
         self.idobscat = str(idobscat)
         #self.obscat = str(obscat)
+        self.withalt = withalt
         self.annotations = annotations
         
 class Annotation():
@@ -1224,7 +1356,7 @@ class Search_Info_Window():
         utilities_general.below_right(self.window, dist)
         self.window.overrideredirect(True)
         self.window.withdraw()
-        print("GO!")
+        #print("GO!")
 
 class popupWindow(object):
     def __init__(self,master, valor):
@@ -1268,13 +1400,17 @@ class CustomCanvas(tkinter.Canvas):
         tocx = utilities_general.locateToc(flooratual, global_settings.pathpdfatual,\
                                            p0y=restoemdeslocy, init=None, tocpdf=global_settings.infoLaudo[global_settings.pathpdfatual].toc)
         if(tocx!=None):
-            tocxitem = str(global_settings.pathpdfatual)+tocx
+            tocxx = ''
+            if(tocx[1]!=''):
+                tocxx = tocx[0]+str(tocx[1])+str(tocx[2])
+            tocxitem = str(global_settings.pathpdfatual)+tocxx
             if(self.program.treeviewEqs.item(self.program.treeviewEqs.parent(tocxitem), 'open')):
                 self.program.treeviewEqs.selection_set(tocxitem)
             else:
                 self.program.treeviewEqs.selection_set(self.program.treeviewEqs.parent(tocxitem))            
         atual = round((self.program.vscrollbar.get()[0]*global_settings.infoLaudo[global_settings.pathpdfatual].len))
         self.program.pagVar.set(atual+1)
+        global_settings.infoLaudo[global_settings.pathpdfatual].something_changed = True
         if not args:
             return self._getdoubles(res)        
         
@@ -1290,12 +1426,16 @@ class CustomCanvas(tkinter.Canvas):
         tocx = utilities_general.locateToc(flooratual, global_settings.pathpdfatual,\
                                            p0y=restoemdeslocy, init=None, tocpdf=global_settings.infoLaudo[global_settings.pathpdfatual].toc)
         if(tocx!=None):
-            tocxitem = str(global_settings.pathpdfatual)+tocx
+            tocxx = ''
+            if(tocx[1]!=''):
+                tocxx = tocx[0]+str(tocx[1])+str(tocx[2])
+            tocxitem = str(global_settings.pathpdfatual)+tocxx
             if(self.program.treeviewEqs.item(self.program.treeviewEqs.parent(tocxitem), 'open')):
                 self.program.treeviewEqs.selection_set(tocxitem)
             else:
                 self.program.treeviewEqs.selection_set(self.program.treeviewEqs.parent(tocxitem))                            
         atual = round((self.program.vscrollbar.get()[0]*global_settings.infoLaudo[global_settings.pathpdfatual].len))
+        global_settings.infoLaudo[global_settings.pathpdfatual].something_changed = True
         self.program.pagVar.set(atual+1)
         #root.update_idletasks()
         
@@ -1313,12 +1453,16 @@ class CustomCanvas(tkinter.Canvas):
         tocx = utilities_general.locateToc(flooratual, global_settings.pathpdfatual,\
                                            p0y=restoemdeslocy, init=None, tocpdf=global_settings.infoLaudo[global_settings.pathpdfatual].toc)
         if(tocx!=None):
-            tocxitem = str(global_settings.pathpdfatual)+tocx
+            tocxx = ''
+            if(tocx[1]!=''):
+                tocxx = tocx[0]+str(tocx[1])+str(tocx[2])
+            tocxitem = str(global_settings.pathpdfatual)+tocxx
             if(self.program.treeviewEqs.item(self.program.treeviewEqs.parent(tocxitem), 'open')):
                 self.program.treeviewEqs.selection_set(tocxitem)
             else:
                 self.program.treeviewEqs.selection_set(self.program.treeviewEqs.parent(tocxitem))                         
         atual = round((self.program.vscrollbar.get()[0]*global_settings.infoLaudo[global_settings.pathpdfatual].len))
+        global_settings.infoLaudo[global_settings.pathpdfatual].something_changed = True
         self.program.pagVar.set(atual+1)
         #if(str(atual+1)!=self.program.pagVar.get()):
         #    self.program.pagVar.set(str(atual+1)) 
@@ -1339,12 +1483,16 @@ class CustomCanvas(tkinter.Canvas):
         tocx = utilities_general.locateToc(flooratual, global_settings.pathpdfatual,\
                                            p0y=restoemdeslocy, init=None, tocpdf=global_settings.infoLaudo[global_settings.pathpdfatual].toc)
         if(tocx!=None):
-            tocxitem = str(global_settings.pathpdfatual)+tocx
+            tocxx = ''
+            if(tocx[1]!=''):
+                tocxx = tocx[0]+str(tocx[1])+str(tocx[2])
+            tocxitem = str(global_settings.pathpdfatual)+tocxx
             if(self.program.treeviewEqs.item(self.program.treeviewEqs.parent(tocxitem), 'open')):
                 self.program.treeviewEqs.selection_set(tocxitem)
             else:
                 self.program.treeviewEqs.selection_set(self.program.treeviewEqs.parent(tocxitem)) 
         atual = round((self.program.vscrollbar.get()[0]*global_settings.infoLaudo[global_settings.pathpdfatual].len))
+        global_settings.infoLaudo[global_settings.pathpdfatual].something_changed = True
         self.program.pagVar.set(atual+1)  
         #if(str(atual+1)!=self.program.pagVar.get()):
         #    self.program.pagVar.set(str(atual+1))

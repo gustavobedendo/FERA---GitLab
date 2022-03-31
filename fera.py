@@ -32,6 +32,7 @@ import indexador_fera
 from functools import partial
 import shutil
 
+
 import xlsxwriter
 import binascii, io
 import utilities_general, utilities_export
@@ -48,7 +49,6 @@ class MainWindow():
           elm[:2] != ('!disabled', '!selected')]
     
     def __init__(self):
-        
         self.lista_executaveis = ['Escutar e transcrever']        
         self.paginaSearchSimple = -1
         self.termossimplespesquisados = {}
@@ -399,17 +399,35 @@ class MainWindow():
     def check_errors(self):
         try:
             erro = None
-            if(not global_settings.erros_queue.empty()):             
+            
+            if(not global_settings.erros_queue.empty()):   
+                 
                  erro = global_settings.erros_queue.get(0)
-                 print("ERRO: ",erro[1])
+                 print(erro)
+                 utilities_general.printlogexception(ex=erro[1])
                  if(erro[0]=='2'):
-                     None
+                     print('xyz')
+                     global_settings.log_window_text.insert('end',erro[1])
+                     global_settings.log_window_text.insert('end',"\n")
+                     
+                 elif(erro[0]=='3'): 
+                     print('abc')
+                     global_settings.log_window_text.insert('end',erro[1] + " " + erro[2] + "\n")
+                     global_settings.log_window_text.insert('end',erro[4] + "\n")
+                     global_settings.log_window_text.insert('end',"\n")
+                     utilities_general.popup_window("{} - {} \n {}".format(erro[1], erro[2], erro[4]), False)
+                     idtermo = str(erro[3])
+                     idx = 't'+idtermo
+                     print(idx, (self.treeviewSearches.exists(idx)))
+                     if(self.treeviewSearches.exists(idx)):
+                         self.treeviewSearches.item(idx, tags=("termowitherror",))
+                     
             else:
                 time.sleep(0.1)    
-            if(erro[0]=='erro'):
-                utilities_general.printlogexception(ex=erro[1])
-            else:
-                None
+            #if(erro[0]=='erro'):
+            #    utilities_general.printlogexception(ex=erro[1])
+            #else:
+            #    None
         except:
             None
         finally:
@@ -496,7 +514,6 @@ class MainWindow():
             None
             
     def enhance_observations(self, respostaPagina):
-        #print(respostaPagina.qualPagina)
         if(global_settings.pathpdfatual in self.allobs):
             for observation in self.allobs[global_settings.pathpdfatual]:
                 if(respostaPagina.qualPagina < observation.paginainit or respostaPagina.qualPagina > observation.paginafim):     
@@ -517,9 +534,10 @@ class MainWindow():
                     posicaoRealY0 = posicoes_normalizadas[1]
                     posicaoRealX1 = posicoes_normalizadas[2]
                     posicaoRealY1 = posicoes_normalizadas[3]
+                   
                     self.prepararParaQuads(p, posicaoRealX0, posicaoRealY0, posicaoRealX1, posicaoRealY1, color=self.colorenhancebookmark, \
-                                           tag=['enhanceobs'+global_settings.pathpdfatual+str(p),'enhanceobs'+str(iiditem), "enhanceobs"], \
-                                               apagar=False,  enhancetext=enhancetext, enhancearea=enhancearea, withborder=False, alt=False)
+                                           tag=['enhanceobs'+global_settings.pathpdfatual+str(p),'enhanceobs'+str(iiditem), 'enhanceobs'+str(iiditem)+str(p), "enhanceobs"], \
+                                               apagar=False,  enhancetext=enhancetext, enhancearea=enhancearea, withborder=False, alt=observation.withalt)
                 for annot in observation.annotations:
                     annotation = observation.annotations[annot]
                     if(annotation.conteudo!=''):
@@ -582,7 +600,7 @@ class MainWindow():
                             respostaPagina.qualPagina <= (atual+math.ceil(global_settings.minMaxLabels/2))) and \
                             respostaPagina.qualPdf == global_settings.pathpdfatual and respostaPagina.zoom == self.zoom_x*global_settings.zoom):   
                         indice = (respostaPagina.qualLabel * global_settings.divididoEm) + respostaPagina.qualGrid
-                        zoom = global_settings.listaZooms[global_settings.posicaoZoom]
+                        zoom = global_settings.zoom
                         altura = math.floor((respostaPagina.qualPagina*global_settings.infoLaudo[global_settings.pathpdfatual].pixorgh*self.zoom_x*global_settings.zoom) + \
                                             ((respostaPagina.qualGrid/global_settings.divididoEm)*global_settings.infoLaudo[global_settings.pathpdfatual].pixorgh*self.zoom_x*global_settings.zoom))
                         coords = self.docInnerCanvas.coords(self.ininCanvasesid[indice])
@@ -637,7 +655,11 @@ class MainWindow():
                             self.treeviewSearches.item(idx, text=termo.upper() + ' (' + str(th) + ')'  + " - "+tipobusca)  
                             self.treeviewSearches.item(idx, tags=("termosearch",))
                             valores = self.treeviewSearches.item(idx, 'values')
-                            self.treeviewSearches.item(idx, values=(valores[0], valores[1], th,))
+                            self.treeviewSearches.item(idx, values=(valores[0], valores[1], th, termo.upper(), tipobusca,))
+                            #for child in self.treeviewSearches.get_children(idx):
+                                
+                            #    self.treeviewSearches.item(idx, values=(valores[0], valores[1], th, termo.upper(),))
+                            
                         elif(res[0]==1):
                             try:
                                 for resultsearch in res[1]:
@@ -649,14 +671,21 @@ class MainWindow():
                                         termo = resultsearch.termo
                                         idtermopdf = resultsearch.idtermopdf
                                         pathpdfbase = os.path.basename(resultsearch.pathpdf)
+                                        
                                         snippet = resultsearch.snippet[0] + resultsearch.snippet[1] + resultsearch.snippet[2]                                    
                                         pagina = resultsearch.pagina  
                                         t = 't'+resultsearch.idtermo
                                         tp = 'tp'+resultsearch.idtermopdf
+                                        if(not t in global_settings.idtermopdfs):
+                                            global_settings.idtermopdfs[t] = {}
+                                        
+                                        global_settings.idtermopdfs[t][(tp, pathpdfbase)] = []
                                         tptoc = resultsearch.tptoc
-                                        if(not self.treeviewSearches.exists(tp)):                                            
-                                            self.treeviewSearches.insert(parent=t, index='end', iid=tp, \
-                                                                         text=pathpdfbase, tag=('relsearch'), image=global_settings.resultdoc, values=(pathpdfbase,))                                     
+                                        if(not self.treeviewSearches.exists(tp)):  
+                                            index_insert = self.insertIndex(self.treeviewSearches, t, pathpdfbase, 0)
+                                            self.treeviewSearches.insert(parent=t, index=index_insert, iid=tp, \
+                                                                         text=pathpdfbase, tag=('relsearch'), image=global_settings.resultdoc, \
+                                                                             values=(pathpdfbase, resultsearch.idpdf,))                                     
                                         
                                         if(tptoc!=None):
                                             
@@ -820,6 +849,7 @@ class MainWindow():
                 except Exception as ex:
                     None
                 if(global_settings.pathpdfatual!=newpath or item!=None):
+                    pdfantigo = global_settings.pathpdfatual
                     for i in range(global_settings.minMaxLabels):
                         global_settings.processed_pages[i] = -1
                     sobraEspaco = 0
@@ -831,10 +861,14 @@ class MainWindow():
                     self.scrolly = global_settings.infoLaudo[newpath].pixorgh*self.zoom_x*global_settings.zoom*global_settings.infoLaudo[newpath].len  - 35
                     self.docInnerCanvas.config(scrollregion=(sobraEspaco, 0, sobraEspaco+ (global_settings.infoLaudo[newpath].pixorgw*global_settings.zoom*self.zoom_x), self.scrolly))
                     pagina = round(global_settings.infoLaudo[newpath].ultimaPosicao*global_settings.infoLaudo[newpath].len)   
-                    self.docInnerCanvas.yview_moveto(global_settings.infoLaudo[newpath].ultimaPosicao)
+                    global_settings.pathpdfatual = utilities_general.get_normalized_path(newpath)
+                    if(global_settings.infoLaudo[pdfantigo].zoom_pos!=global_settings.infoLaudo[global_settings.pathpdfatual].zoom_pos):
+                        self.zoomx(None, None, pdfantigo, global_settings.infoLaudo[newpath].ultimaPosicao)
+                    else:
+                        self.docInnerCanvas.yview_moveto(global_settings.infoLaudo[newpath].ultimaPosicao)
                     if(str(pagina+1)!=self.pagVar.get()):
                         self.pagVar.set(str(pagina+1))
-                    global_settings.pathpdfatual = utilities_general.get_normalized_path(newpath)
+                    
                     try:
                         global_settings.docatual.close()
                     except Exception as ex:
@@ -844,12 +878,14 @@ class MainWindow():
                     self.totalPgg.config(font=global_settings.Font_tuple_Arial_10, text="/ "+str(global_settings.infoLaudo[global_settings.pathpdfatual].len))
                     self.clearAllImages()
                     for pdf in global_settings.infoLaudo:
-                        global_settings.infoLaudo[pdf].retangulosDesenhados = {}  
+                        global_settings.infoLaudo[pdf].retangulosDesenhados = {}
+                    
                 if(event!=None):
                     self.treeviewEqs.selection_set(iid)
                 else:
                     self.treeviewEqs.selection_set(item)                                    
             elif(opcao=="toc"): 
+                pdfantigo = global_settings.pathpdfatual
                 newpath = valores[1]
                 eq = selecao[3]
                 toc = selecao[2]
@@ -882,6 +918,9 @@ class MainWindow():
                 pagina = int(valores[3])
                 deslocy = float(valores[4])
                 ondeir = (float(pagina) / (global_settings.infoLaudo[global_settings.pathpdfatual].len)+(deslocy*self.zoom_x*global_settings.zoom)/self.scrolly)
+                if(global_settings.infoLaudo[pdfantigo].zoom_pos!=global_settings.infoLaudo[global_settings.pathpdfatual].zoom_pos):
+                    self.zoomx(None, None, pdfantigo)
+                #global_settings.root.after(1, lambda: self.docInnerCanvas.yview_moveto(ondeir))
                 self.docInnerCanvas.yview_moveto(ondeir)
                 if(str(pagina+1)!=self.pagVar.get()):
                     self.pagVar.set(str(pagina+1))
@@ -949,16 +988,90 @@ class MainWindow():
                 self.eqmenu = tkinter.Menu(global_settings.root, tearoff=0)
                 self.eqmenu.add_command(label='Copiar Índice', image=global_settings.copycat, compound='left',  command=lambda iid=iid: self.copyTOC(iid)) 
                 self.eqmenu.add_command(label='Copiar Nome', image=global_settings.copycat, compound='left',  command=lambda iid=iid: self.copyName(iid))
+                self.eqmenu.add_command(label='Mover para', image=global_settings.copycat, compound='left',  command=lambda iid=iid: self.change_eq_name(iid))
                 try:
                     if(isinstance(event.widget, ttk.Treeview)):
                         self.eqmenu.tk_popup(event.x_root, event.y_root) 
                 except Exception as ex:
                     utilities_general.printlogexception(ex=ex) 
                 finally:
-                    self.eqmenu.grab_release()
+                    self.eqmenu.grab_release()  
+            if(self.treeviewEqs.tag_has('equipmentlp', iid)):
+                self.eqmenu = tkinter.Menu(global_settings.root, tearoff=0)
+                self.eqmenu.add_command(label='Renomear', image=global_settings.copycat, compound='left',  command=lambda iid=iid: self.change_eq_name(iid))
+                try:
+                    if(isinstance(event.widget, ttk.Treeview)):
+                        self.eqmenu.tk_popup(event.x_root, event.y_root) 
+                except Exception as ex:
+                    utilities_general.printlogexception(ex=ex) 
+                finally:
+                    self.eqmenu.grab_release() 
         except Exception as ex: 
             utilities_general.printlogexception(ex=ex)
             
+    def invert_first_second_layer_tree():
+        None
+    
+    def change_eq_name(self, iid):
+        texto_candidato = ""
+        idpdfs = []
+        if(self.treeviewEqs.tag_has('equipmentlp', iid)):
+            texto_candidato = self.treeviewEqs.item(iid)['text']
+            w=classes_general.popupWindow(global_settings.root,texto_candidato)      
+            global_settings.root.wait_window(w.top)
+            if(w.value!=None and w.value.strip()!=''):
+                children = None
+                children = self.treeviewEqs.get_children(iid)
+                
+                new_alias = w.value.strip().upper()
+                exists = self.treeviewEqs.exists(new_alias)
+                for child in children:
+                    p = self.treeviewEqs.item(child, 'values')[1]
+                    global_settings.infoLaudo[p].alias_parent = w.value.upper()
+                    idpdfs.append(global_settings.infoLaudo[p].id)                
+                    if(exists):
+                        index_insert = self.insertIndex(self.treeviewEqs, new_alias, os.path.basename(p), 0)
+                        self.treeviewEqs.move(child, new_alias, index_insert)
+                if(not exists):
+                    self.treeviewEqs.item(iid, text = w.value.upper())
+                    self.treeviewEqs.item(iid, values = ('eq', w.value.upper()))                   
+                else:
+                    self.treeviewEqs.delete(iid)
+        elif(self.treeviewEqs.tag_has('reportlp', iid)):
+            texto_candidato = self.treeviewEqs.item(self.treeviewEqs.parent(iid))['text']
+            w=classes_general.popupWindow(global_settings.root,texto_candidato)      
+            global_settings.root.wait_window(w.top)
+            if(w.value!=None and w.value.strip()!=''):
+                new_alias = w.value.strip().upper()
+                exists = self.treeviewEqs.exists(new_alias)
+                old_parent = self.treeviewEqs.parent(iid)
+                p = self.treeviewEqs.item(iid, 'values')[1]
+                global_settings.infoLaudo[p].alias_parent = new_alias
+                idpdfs.append(global_settings.infoLaudo[p].id) 
+                if(not exists):
+                    index_insert = self.insertIndex(self.treeviewEqs, '', new_alias, 0)
+                    self.treeviewEqs.insert(parent='', index=index_insert, iid=new_alias, text=new_alias, \
+                                            image=global_settings.imageequip, tag='equipmentlp', values=('eq', str(w.value.upper()), global_settings.infoLaudo[p].id,))
+                index_insert = self.insertIndex(self.treeviewEqs, new_alias, os.path.basename(p), 0)
+                self.treeviewEqs.move(iid, new_alias, index_insert)
+                if(len(self.treeviewEqs.get_children(old_parent))==0):
+                    self.treeviewEqs.delete(old_parent)
+                    
+            
+        updateinto2 = "UPDATE Anexo_Eletronico_Pdfs set parent_alias = '{new_alias}' WHERE id_pdf IN ({seq})".\
+            format(new_alias=new_alias, seq=','.join(['?']*len(idpdfs)))      
+                
+        sqliteconn = utilities_general.connectDB(str(global_settings.pathdb))
+        try:
+            cursor = sqliteconn.cursor()
+            cursor.custom_execute(updateinto2, idpdfs)
+            sqliteconn.commit()
+        except Exception as ex:
+            utilities_general.printlogexception(ex=ex) 
+        finally:
+            if(sqliteconn):
+                sqliteconn.close()
+    
     def tabOpened(self, event=None):
         texto = (self.notebook.tab(self.notebook.select(), 'text'))        
         if(texto=='Buscas (*)'):
@@ -1207,7 +1320,9 @@ class MainWindow():
                     self.delitemcat.add_command(label="Validar Observação", image=global_settings.checki, compound='left', command=lambda: self.addcatpopup(None, 'validarobs'))
     
                 self.delitemcat.tk_popup(event.x_root, event.y_root) 
-                
+    
+             
+    
     def treeview_search_right(self, event=None):
         iid = self.treeviewSearches.identify_row(event.y)  
         if(self.treeviewSearches.parent(iid)=='' and self.treeviewSearches.item(iid, 'text') != '' and False):
@@ -1235,6 +1350,8 @@ class MainWindow():
                         cat_text = self.treeviewObs.item(obscat, 'text')
                         idobscat = self.treeviewObs.item(obscat, 'values')[1]
                         menucats.add_command(label=cat_text, image=global_settings.itemimage, compound='left', command=partial(self.addmarkerFromSearch,idobscat,event))
+                    menucats.add_separator()
+                    menucats.add_command(label="Nova categoria", image=global_settings.addcat, compound='left', command=partial(self.addmarkerFromSearch,None, event))
                     self.menuexportsearchtobs.add_cascade(label='Enviar para:', menu=menucats, image=global_settings.catimage, compound='left')
                     if(self.treeviewSearches.tag_has('termosearch', iid)):
                         #self.menuexportsearchtobs.add_separator()
@@ -1254,6 +1371,10 @@ class MainWindow():
             
             for selecao in self.treeviewSearches.selection():
                 if(self.treeviewSearches.parent(selecao)=='' and self.treeviewSearches.item(selecao, 'text') != ''):
+                    try:
+                        del global_settings.idtermopdfs[selecao]
+                    except:
+                        None
                     qtos += 1
                     if(selecao in global_settings.searchResultsDict):
                         resultsearch = global_settings.searchResultsDict[selecao]
@@ -1346,7 +1467,7 @@ class MainWindow():
                             cursor.close()
                             tocpdf = global_settings.infoLaudo[basepdf].toc
                             try:
-                                tocname = utilities_general.locateToc(int(paginainit), basepdf, p0y=p0y, tocpdf=tocpdf)
+                                tocname = utilities_general.locateToc(int(paginainit), basepdf, p0y=p0y, tocpdf=tocpdf)[0]
                                 novoiidtoc = str(iidnovo)+basepdf+tocname
                                 ident= ' '
                                 if(not self.treeviewObs.exists(str(iidnovo)+basepdf)):
@@ -1465,6 +1586,7 @@ class MainWindow():
             self.menuorderby.add_command(label="Alfabética Decrescente", compound='left', image=global_settings.orderazdown, command= lambda: self.orderSeachesBy('azdec'))
             self.menuorderby.add_command(label="Qtde. Hits. Crescente", compound='left', image=global_settings.ordernumberup, command= lambda: self.orderSeachesBy('hitcres'))
             self.menuorderby.add_command(label="Qtde. Hits. Decrescente", compound='left', image=global_settings.ordernumberdown, command= lambda: self.orderSeachesBy('hitdec'))
+        
         try:
             self.menuorderby.tk_popup(event.x_root, event.y_root)         
         except Exception as ex:
@@ -1516,6 +1638,7 @@ class MainWindow():
             utilities_general.popup_window("Erro na inserção/edição de categoria.", False)
             utilities_general.printlogexception(ex=ex)
         finally:
+            self.menuaddcat["state"] = "normal" 
             if(sqliteconn):
                 sqliteconn.close()
     
@@ -1583,7 +1706,7 @@ class MainWindow():
                 observation = self.allobsbyitem[item]
                 estaselecao = ""
                 if(observation.conteudo!=''):
-                    observacao_p1 = "Observação do Perito: "
+                    observacao_p1 = "Observação: "
                     estaselecao += '{\\rtlch\\ltrch\\loch\\fs20\\li72\\f2\\b\\ul{'+observacao_p1.encode('rtfunicode').decode('ascii') + '}}'
                     estaselecao += '{\\rtlch\\ltrch\\loch\\fs20\\li72\\f2\\i{'+observation.conteudo.encode('rtfunicode').decode('ascii') + '}\\line}'
                 estaselecao+="[...]\\line"
@@ -1659,8 +1782,9 @@ class MainWindow():
             p0xinit = observation.p0x
             p0yinit = observation.p0y
             p1xinit = observation.p1x
-            p1yinit = observation.p1y             
+            p1yinit = observation.p1y   
             if(tiposelecao=='texto'):
+                
                 textonatabela, textoselecao = self.ObstoRTf(iid, docespecial, pathdocespecial1, \
                                                           tiposelecao, pinit, pfim, p0xinit, p0yinit, \
                                                               p1xinit, p1yinit, estaselecao=textoselecao, pmin=pinit2, pmax = pfim2, withnote=withnotes)
@@ -1670,7 +1794,7 @@ class MainWindow():
         utilities_general.copy_to_clipboard("rtf", conteudo) 
      
     def export_images_table_rtf(self, withnotes=False):    
-        utilities_export.Export_Images_To_Table(withnotes)
+        utilities_export.Export_Images_To_Table(self, withnotes)
         
     def copy_obs_rtf(self, withnotes=False):  
         selected_obs = self.treeviewObs.selection()
@@ -1850,6 +1974,7 @@ class MainWindow():
          try:
              observation = self.allobsbyitem[idobsitem]
              annotations = observation.annotations
+             #print(annotations)
              margemsup = (global_settings.infoLaudo[pathdocespecial].mt/25.4)*72
              margeminf = global_settings.infoLaudo[pathdocespecial].pixorgh-((global_settings.infoLaudo[pathdocespecial].mb/25.4)*72)
              margemesq = (global_settings.infoLaudo[pathdocespecial].me/25.4)*72
@@ -1883,7 +2008,7 @@ class MainWindow():
                      pix = None
                      images.append(imgdata)
                  if(len(images) > 0):
-                     imagem = self.concatVertical(images)
+                     imagem = utilities_general.concatVertical(images)
                     
                      if platform.system() == 'Windows' or  platform.system() == 'Linux':    # Windows
                          output = io.BytesIO()
@@ -1920,8 +2045,8 @@ class MainWindow():
                  dictx = None
                  for pagina in range(pinit, pfim+1):
                      imagens = set()
-                     width, height = 250, 250
-                     size = 250, 250
+                     width, height = 340, 340
+                     size = 340, 340
                      if(pagina!=pagatual):
                          pagatual = docespecial[pagina]
                          dictx = docespecial[pagina].get_text("rawdict", flags=2+4+64)
@@ -2050,6 +2175,7 @@ class MainWindow():
                                                     '{\\rtlch\\ltrch\\loch\\fs20\\li72\\f2\\cf4\\i{'+annot_obj.conteudo.encode('rtfunicode').decode('ascii') + '}\\line}'
                                             break
                         elif(block['type']==1):
+                            
                             bboxb = block['bbox']
                             x0b = bboxb[0] 
                             y0b = float(bboxb[1])
@@ -2066,22 +2192,60 @@ class MainWindow():
                                         pngtohex = ""
                                         content = ""
                                         width, height = None, None
+                                        filepath = str(Path(os.path.join(Path(pathdocespecial).parent,annot_obj.link)))        
+                                        lines = ''
                                         try:
-                                            filepath = str(Path(os.path.join(Path(pathdocespecial).parent,annot_obj.link)))
-                                            with Image.open(filepath) as imx:
-                                                imx.thumbnail(size, Image.ANTIALIAS)
-                                                imx.save('teste.png','PNG')
-                                                width, height = imx.size
-                                            with open('teste.png', 'rb') as f:
-                                                content = f.read()
-                                                pngtohex = binascii.hexlify(content).decode('utf8')
-                                                estaselecao += \
-                            "{{\\qc \\rtlch \\ltrch\\loch\\qc\\pict\\pngblip\\picscalex100\\picscaley100\\piccropl0\\piccropr0\\piccropt0\\piccropb0\\picw{}\\pich{}\n{}}}\\line"\
-                                .format(width, height, pngtohex)
-                                                os.remove('teste.png')
-                                               
-                                                imagens.add((annot_obj.link, pathdocespecial))
-                                                links_img.append((annot_obj.p0y, annot_obj.p1y, pngtohex))
+                                            filename, extension = os.path.splitext(filepath)
+                                            if(extension in global_settings.listavidformats):
+                                                #ffmpeg -ss 01:23:45 -i input -frames:v 1 -q:v 2 output.jpg
+                                                comando = f"ffmpeg -y -ss 1 -i \"{filepath}\" -frames:v 1 -q:v 2 teste.png"       
+                                                #popen = subprocess.Popen(comando, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                                popen = subprocess.run(comando,universal_newlines=True, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                                                #return_code = popen.wait()
+                                                
+                                                if(not os.path.exists("teste.png")):
+                                                    comando = f"ffmpeg -y -ss 0 -i \"{filepath}\" -frames:v 1 -q:v 2 teste.png"                                              
+                                                    #popen = subprocess.Popen(comando, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                                    popen = subprocess.run(comando,universal_newlines=True, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                                                    
+                                                    lines = popen.stderr.split("\n")
+                                                    if(len(lines)>0):
+                                                        raise classes_general.FFMPEGException(lines)
+                                                    
+                                                    #return_code = popen.wait()
+                                                if(os.path.exists("teste.png")):                                                
+                                                    with Image.open("teste.png") as imx:
+                                                        imx.thumbnail(size, Image.ANTIALIAS)
+                                                        imx.save('teste.png','PNG')
+                                                        width, height = imx.size
+                                                    with open('teste.png', 'rb') as f:
+                                                        content = f.read()
+                                                        pngtohex = binascii.hexlify(content).decode('utf8')
+                                                        estaselecao += \
+                                    "{{\\rtlch \\ltrch\\loch\\qc\\pict\\pngblip\\picscalex100\\picscaley100\\piccropl0\\piccropr0\\piccropt0\\piccropb0\\picw{}\\pich{}\n{}}}\\line"\
+                                        .format(width, height, pngtohex)
+                                                        #os.remove('teste.png')
+                                                       
+                                                        imagens.add((annot_obj.link, pathdocespecial))
+                                                        links_img.append((annot_obj.p0y, annot_obj.p1y, pngtohex))
+                                                	
+                                            else:
+                                                with Image.open(filepath) as imx:
+                                                    imx.thumbnail(size, Image.ANTIALIAS)
+                                                    imx.save('teste.png','PNG')
+                                                    width, height = imx.size
+                                                with open('teste.png', 'rb') as f:
+                                                    content = f.read()
+                                                    pngtohex = binascii.hexlify(content).decode('utf8')
+                                                    estaselecao += \
+                                "{{\\rtlch \\ltrch\\loch\\qc\\pict\\pngblip\\picscalex100\\picscaley100\\piccropl0\\piccropr0\\piccropt0\\piccropb0\\picw{}\\pich{}\n{}}}\\line"\
+                                    .format(width, height, pngtohex)
+                                                    #os.remove('teste.png')
+                                                   
+                                                    imagens.add((annot_obj.link, pathdocespecial))
+                                                    links_img.append((annot_obj.p0y, annot_obj.p1y, pngtohex))
+                                        except classes_general.FFMPEGException as ex:
+                                            utilities_general.printlogexception(ex=ex)
                                         except Exception as ex:
                                             utilities_general.printlogexception(ex=ex)
                                         finally:
@@ -2090,7 +2254,10 @@ class MainWindow():
                                             except:
                                                 None                             
                                         if(withnote and annot_obj.conteudo!=''):
-                                            observacao_p1 = "Observação do Perito: "
+                                            observacao_p0 = "          "
+                                            observacao_p1 = "↳ Observação: "
+                                            estaselecao += '{\\rtlch\\ltrch\\loch\\fs20\\li72\\f2{'+observacao_p0.encode('rtfunicode').decode('ascii') + '}}'
+                                            #observacao_p1 = "Observação do Perito: "
                                             estaselecao += '{\\rtlch\\ltrch\\loch\\fs20\\li72\\f2\\b\\ul{'+observacao_p1.encode('rtfunicode').decode('ascii') + '}}'
                                             estaselecao += '{\\rtlch\\ltrch\\loch\\fs20\\li72\\f2\\i{'+annot_obj.conteudo.encode('rtfunicode').decode('ascii') + '}\\line}'
                                         #break
@@ -2154,6 +2321,7 @@ class MainWindow():
                 except Exception as ex:
                     None                
                 if(pathpdf!=global_settings.pathpdfatual):
+                    pdfantigo = global_settings.pathpdfatual
                     self.docwidth = self.docOuterFrame.winfo_width()                    
                     self.clearAllImages()
                     for i in range(global_settings.minMaxLabels):
@@ -2171,6 +2339,9 @@ class MainWindow():
                         self.maiorw = global_settings.infoLaudo[global_settings.pathpdfatual].pixorgw*self.zoom_x *global_settings.zoom           
                     self.scrolly = round((global_settings.infoLaudo[global_settings.pathpdfatual].pixorgh*self.zoom_x*global_settings.zoom), 16)*global_settings.infoLaudo[global_settings.pathpdfatual].len - 35
                     self.docInnerCanvas.config(scrollregion=(sobraEspaco, 0, sobraEspaco+ (global_settings.infoLaudo[global_settings.pathpdfatual].pixorgw*global_settings.zoom*self.zoom_x), self.scrolly))                
+                    if(global_settings.infoLaudo[pdfantigo].zoom_pos!=global_settings.infoLaudo[global_settings.pathpdfatual].zoom_pos):
+                        #global_settings.root.after(1, lambda: self.zoomx(None, None, pdfantigo))
+                        self.zoomx(None, None, pdfantigo)
                 atual = ((self.vscrollbar.get()[0]*global_settings.infoLaudo[global_settings.pathpdfatual].len))
                 ondeir = (pp / (global_settings.infoLaudo[global_settings.pathpdfatual].len)+(posicaoRealY0*self.zoom_x*global_settings.zoom- global_settings.infoLaudo[global_settings.pathpdfatual].pixorgw/2*self.zoom_x*global_settings.zoom)/self.scrolly)
                 deslocy = (math.floor(pp) * global_settings.infoLaudo[global_settings.pathpdfatual].pixorgh * self.zoom_x*global_settings.zoom) + (posicaoRealY0 *  self.zoom_x * global_settings.zoom)  
@@ -2188,15 +2359,16 @@ class MainWindow():
                     enhancearea = True
                 elif(valores[0]=='texto'):
                     enhancetext = True
+                obsobject = self.allobsbyitem[item]
                 for p in range(pp, up+1): 
                     posicoes_normalizadas = self.normalize_positions(p, pp, up, \
                                              posicaoRealX0, posicaoRealY0, posicaoRealX1,posicaoRealY1)
-                    posicaoRealX0 = posicoes_normalizadas[0]
-                    posicaoRealY0 = posicoes_normalizadas[1]
-                    posicaoRealX1 = posicoes_normalizadas[2]
-                    posicaoRealY1 = posicoes_normalizadas[3]
-                    self.prepararParaQuads(p, posicaoRealX0, posicaoRealY0, posicaoRealX1, posicaoRealY1, self.color, tag=['obsitem'], apagar=True, \
-                                           enhancetext=enhancetext, enhancearea=enhancearea, alt=False)
+                    posicaoRealX0_temp = posicoes_normalizadas[0]
+                    posicaoRealY0_temp = posicoes_normalizadas[1]
+                    posicaoRealX1_temp = posicoes_normalizadas[2]
+                    posicaoRealY1_temp = posicoes_normalizadas[3]
+                    self.prepararParaQuads(p, posicaoRealX0_temp, posicaoRealY0_temp, posicaoRealX1_temp, posicaoRealY1_temp, self.color, tag=['obsitem'], apagar=True, \
+                                           enhancetext=enhancetext, enhancearea=enhancearea, alt=obsobject.withalt)
         except Exception as ex:
             utilities_general.printlogexception(ex=ex)
 
@@ -2574,6 +2746,19 @@ class MainWindow():
                         a_file.write('{} {}\n'.format(tipobusca, termo))
         except Exception as ex:
             utilities_general.printlogexception(ex=ex) 
+    
+           
+    
+    def insertIndex(self, tree, parent, texto_candidato, index=0):
+        children = tree.get_children(parent)
+        
+        for child in children:
+            texto = tree.item(child, 'text')
+            if(texto_candidato < texto):
+                break
+            index += 1
+        return index
+            
     def leftPanel(self):
           
         global_settings.pathpdfatual = None
@@ -2627,54 +2812,79 @@ class MainWindow():
             maiorresult = 0
             self.primeiro = None
             #rels = global_settings.infoLaudo.keys()
+            index = 0
+            
             for relatorio in sorted(global_settings.infoLaudo):
                 p = Path(relatorio)
                 pai = p.parent
                 paibase = os.path.basename(pai)
                 ok = False
-                for k in range(3):
-                    if("EQ" in paibase.upper()):
-                        ok = True
-                        break
-                    else:
-                        pai = pai.parent
-                        paibase = os.path.basename(pai)
+                if(global_settings.infoLaudo[relatorio].parent_alias != None and \
+                   global_settings.infoLaudo[relatorio].parent_alias!=''):
+                    paibase = global_settings.infoLaudo[relatorio].parent_alias
+                    ok = True
+                else:
+                    for k in range(3):
+                        if("EQ" in paibase.upper()):
+                            ok = True
+                            break
+                        else:
+                            pai = pai.parent
+                            paibase = os.path.basename(pai)
                 if(not ok):
                     paibase = "Documentos"
                     pai = p.parent
                 pdfbase = os.path.basename(p)
                 tipo = "pdf"
-                try:
-                    if(not self.treeviewEqs.exists(pai)):
-                        if(global_settings.infoLaudo[relatorio].tipo=='relatorio'):
-                            self.treeviewEqs.insert(parent='', index='end', iid=pai, text='LAUDO', image=global_settings.imageequip, tag='equipmentlp', values=('eq', str(paibase),))
+                paibase = paibase.strip()
+                if(not paibase.upper() in global_settings.equipments):
+                    global_settings.equipments[paibase.upper()] = []
+                global_settings.equipments[paibase.upper()].append(pdfbase)
+                try:   
+                    if(not self.treeviewEqs.exists(paibase.upper())):
+                        if(global_settings.infoLaudo[relatorio].tipo=='laudo'):
+                            index += 1
+                            self.treeviewEqs.insert(parent='', index='0', iid=paibase.upper(), text='LAUDO',\
+                                                    image=global_settings.imageequip, tag='equipmentlp', values=('eq', str(paibase),))                        
                         else:
-                            self.treeviewEqs.insert(parent='', index='0', iid=pai, text=paibase.upper(), image=global_settings.imageequip, tag='equipmentlp', values=('eq', str(paibase),))
+                            index_insert = self.insertIndex(self.treeviewEqs, '', paibase.upper(), index)
+                            self.treeviewEqs.insert(parent='', index=index_insert, iid=paibase.upper(), text=paibase.upper(), \
+                                                    image=global_settings.imageequip, tag='equipmentlp', values=('eq', str(paibase),))
                 except Exception as ex:
+                    #None
                     utilities_general.printlogexception(ex=ex)
-                self.treeviewEqs.insert(parent=pai, index='end', iid=str(p), text=pdfbase, tag='reportlp', image=global_settings.imagereportb, values=(tipo, str(p),))                
+                index_insert = self.insertIndex(self.treeviewEqs, paibase.upper(), pdfbase, 0)
+                
+                self.treeviewEqs.insert(parent=paibase.upper(), index=index_insert, iid=str(p), text=pdfbase, tag='reportlp',\
+                                        image=global_settings.imagereportb, values=(tipo, str(p), global_settings.infoLaudo[relatorio].id,))                
                 self.treeviewEqs.see(str(p))
                 for t in global_settings.infoLaudo[relatorio].toc:
-                    nivel = t[0].split(' ')[0].split('.')
-                    ident = ''
-                    for k in range(len(nivel)):
-                        ident += '     '
-                    self.treeviewEqs.insert(parent=str(p), index='end', iid=str(p)+t[0],\
-                                            text=ident+t[0], values=('toc', str(p), t[0], t[1], t[2],))
-                    somatexto = paibase.upper()+pdfbase+t[0]
-                    tamanho = global_settings.Font_tuple_ArialBold_10.measure(pdfbase)+150
-                    if(tamanho>maiorresult):
-                        maiorresult = tamanho
-                        self.treeviewEqs.column("#0", width=maiorresult, stretch=True, minwidth=maiorresult, anchor="w")
-                self.treeviewEqs.bind_class('post-tree-teste','<<TreeviewClose>>', lambda e: self.treeview_open(e))
-                if(global_settings.pathpdfatual==None):
-                    global_settings.pathpdfatual = utilities_general.get_normalized_path(relatorio)                    
-                    self.primeiro = str(p)
-                    try:
-                        global_settings.docatual.close()
-                    except Exception as ex:
-                        None
-                    global_settings.docatual = fitz.open(global_settings.pathpdfatual)
+                    #try:
+                        nivel = t[0].split(' ')[0].split('.')
+                        ident = ''
+                        for k in range(len(nivel)):
+                            ident += '     '
+                        self.treeviewEqs.insert(parent=str(p), index='end', iid=str(p)+t[0]+str(t[1])+str(t[2]),\
+                                                text=ident+t[0], values=('toc', str(p), t[0], t[1], t[2],))
+                        somatexto = paibase.upper()+pdfbase+t[0]
+                        tamanho = global_settings.Font_tuple_ArialBold_10.measure(pdfbase)+150
+                        if(tamanho>maiorresult):
+                            maiorresult = tamanho
+                            self.treeviewEqs.column("#0", width=maiorresult, stretch=True, minwidth=maiorresult, anchor="w")
+                    #except:
+                    #    None
+                #self.treeviewEqs.bind_class('post-tree-teste','<<TreeviewClose>>', lambda e: self.treeview_open(e))
+            firstreport = self.treeviewEqs.get_children(self.treeviewEqs.get_children('')[0])[0]
+            firstreportpdf = self.treeviewEqs.item(firstreport, 'values')[1]
+            #if(global_settings.pathpdfatual==None):
+            global_settings.pathpdfatual = utilities_general.get_normalized_path(firstreportpdf)              
+            self.primeiro = firstreportpdf
+            try:
+                global_settings.docatual.close()
+            except Exception as ex:
+                None
+            global_settings.docatual = fitz.open(global_settings.pathpdfatual)
+            global_settings.zoom = global_settings.listaZooms[global_settings.infoLaudo[global_settings.pathpdfatual].zoom_pos]
             self.treeviewEqs.tag_configure('equipmentlp', background='#a1a1a1', font=global_settings.Font_tuple_ArialBoldUnderline_12)
             self.treeviewEqs.tag_configure('reportlp', background='#ebebeb', font=global_settings.Font_tuple_ArialBold_10)            
             self.canvastoc.create_window((0,0), window=self.tocFrame, anchor="nw")            
@@ -2762,6 +2972,11 @@ class MainWindow():
             self.collapse = tkinter.Button(self.searchbuttonsframe, font=global_settings.Font_tuple_Arial_10, text='Colapsar todos', \
                                            image=global_settings.collapseimg, compound="right", command=self.collapseall)
             self.collapse.grid(row=3, column=1,sticky='ns', padx=10, pady=2)
+            
+            self.filter_docs_search = tkinter.Button(self.searchbuttonsframe, font=global_settings.Font_tuple_Arial_10, text='', \
+                                           image=global_settings.filterimage, compound="right", command=self.filter_eqs)
+            self.filter_docs_search.grid(row=3, column=2,sticky='e', padx=10, pady=2)
+            
             bprevfind = tkinter.Button(self.searchbuttonsframe, image=global_settings.imprevfind, font=global_settings.Font_tuple_Arial_10, text="", compound='right', command=lambda: self.iterateSearchList(None, 'anterior'))
             bprevfind.image = global_settings.imprevfind
             bprevfind.grid(column=0, row=0, sticky='ns', padx=10, pady=5, rowspan=2)  
@@ -2785,6 +3000,7 @@ class MainWindow():
             self.treeviewSearches.tag_configure('termosearch', foreground="#000000", background='#d0d0d0', font=global_settings.Font_tuple_ArialBoldUnderline_10)
             self.treeviewSearches.tag_configure('termosearching', foreground='#d0d0d0', font=global_settings.Font_tuple_ArialBold_10)
             self.treeviewSearches.tag_configure('termoinprocess', background='#7dffd8', font=global_settings.Font_tuple_ArialBold_10)
+            self.treeviewSearches.tag_configure('termowitherror', background='#db041a', font=global_settings.Font_tuple_ArialBold_10)
             self.treeviewSearches.tag_configure('resultsearch',font=global_settings.Font_tuple_Arial_8)
             self.treeviewSearches.tag_configure('relsearch', background='#f0f0f0',font=global_settings.Font_tuple_Arial_8)
             self.treeviewSearches.tag_configure('relsearchtoc',font=global_settings.Font_tuple_Arial_8)
@@ -2801,7 +3017,8 @@ class MainWindow():
             self.obsButtonFrame.rowconfigure((0,1,2), weight=1)
             self.obsButtonFrame.columnconfigure((0,1), weight=1)
             self.obsButtonFrame.grid(row=0, column=0, sticky='nsew')
-            self.menuaddcat = tkinter.Button(self.obsButtonFrame, font=global_settings.Font_tuple_Arial_10, text="Adicionar Categoria  ", image=global_settings.addcat, compound='right', command=lambda: self.add_edit_category('add',''))
+            self.menuaddcat = tkinter.Button(self.obsButtonFrame, font=global_settings.Font_tuple_Arial_10, \
+                                             text="Adicionar Categoria  ", image=global_settings.addcat, compound='right', command=lambda: self.add_edit_category('add',''))
             self.menuaddcat.grid(row=0, column=0, columnspan=2, sticky='ns')    
             self.sep1 = ttk.Separator(self.obsButtonFrame,orient='horizontal')
             self.sep1.grid(row=1, column=0, columnspan=2, sticky='ew', pady=(5,0)) 
@@ -2864,7 +3081,7 @@ class MainWindow():
                                             image=global_settings.catimage, tag='obscat')
                     self.treeviewObs.tag_configure('obscat', background='#a1a1a1', font=global_settings.Font_tuple_ArialBoldUnderline_12)
                     check_previous_obsitens =  '''SELECT P.rel_path_pdf, O.paginainit, O.p0x, O.p0y, O.paginafim, O.p1x, O.p1y, O.tipo, O.id_obs, O.fixo, O.status, 
-                    O.conteudo, O.arquivo FROM Anexo_Eletronico_Obsitens O, 
+                    O.conteudo, O.arquivo, O.withalt FROM Anexo_Eletronico_Obsitens O, 
                     Anexo_Eletronico_Pdfs P  WHERE
                         O.id_pdf  = P.id_pdf AND
                         O.id_obscat = ? ORDER BY 2,9'''
@@ -2895,19 +3112,19 @@ class MainWindow():
                         status = obsitem[10]
                         conteudo = obsitem[11]
                         arquivo = obsitem[12]
+                        withalt = True if obsitem[13] == 1 else False
                         ident = ' '
                         
                         if(pathpdf in global_settings.infoLaudo and pathpdf not in self.allobs):
                             self.allobs[pathpdf] = []
                         
                         obsobject = classes_general.Observation(paginainit, paginafim, p0x, p0y, p1x, p1y, tipo, pathpdf, obsitem[8], \
-                                                                obscat[1], conteudo, annotation_list)
+                                                                obscat[1], conteudo, annotation_list, withalt)
                         self.allobs[pathpdf].append(obsobject)
                         self.allobsbyitem['obsitem'+str(obsitem[8])] = obsobject
                         tocpdf = global_settings.infoLaudo[pathpdf].toc
                         #treeobs_insert(self, tipo, fixo, paginainit, paginafim, basepdf, p0x, p0y, p1x, p1y, tocpdf, idobscat, idobsitem, ident)
-                        self.treeobs_insert(tipo, 1, paginainit, paginafim, pathpdf, p0x, p0y, p1x, p1y, tocpdf, obscat[1], obsitem[8],ident = ' ')
-    
+                        self.treeobs_insert(tipo, 1, paginainit, paginafim, pathpdf, p0x, p0y, p1x, p1y, tocpdf, obscat[1], obsitem[8],ident = ' ', tag_alt=status+str(obsitem[8]))
                         if(status=='alterado'):
                             self.treeviewObs.tag_configure(status+str(obsitem[8]), background='#ff4747')
                             
@@ -2925,6 +3142,9 @@ class MainWindow():
                 self.treeviewObs.tag_configure('relobs', background='#e3e1e1')
         except Exception as ex:
             utilities_general.printlogexception(ex=ex)
+            
+    def filter_eqs(self, event=None):
+        filtro_window = classes_general.Filter_Window(self.treeviewEqs, self.treeviewSearches, self)
     
     def collapseallobs(self, event=None):
         for child in self.treeviewObs.get_children(''): 
@@ -2942,6 +3162,7 @@ class MainWindow():
     def deleteSearchDel(self, event=None):
         iids = self.treeviewSearches.selection()
         if(len(iids)==1):
+            
             self.treeviewSearches.selection_set(iids[0])
             if(self.treeviewSearches.parent(iids)=='' and self.treeviewSearches.item(iids[0], 'text') != ''):
                 nxt = self.treeviewSearches.next(iids[0])
@@ -2999,12 +3220,12 @@ class MainWindow():
                                 global_settings.searchqueue.put(pedidosearch)
                                 global_settings.contador_buscas_incr += 1
                             else:
-                                if(len(termo)>=3):
-                                    pedidosearch = classes_general.PedidoSearch(global_settings.contador_buscas_incr*-1, "LIKE", termo)
-                                    global_settings.searchqueue.put(pedidosearch)
-                                    global_settings.contador_buscas_incr += 1
-                    self.uniquesearchprocess2.start() 
-                    self.primeiroresetbuscar = True
+                                #if(len(termo)>=3):
+                                pedidosearch = classes_general.PedidoSearch(global_settings.contador_buscas_incr*-1, "LIKE", termo)
+                                global_settings.searchqueue.put(pedidosearch)
+                                global_settings.contador_buscas_incr += 1
+                    #self.uniquesearchprocess2.start() 
+                    #self.primeiroresetbuscar = True
                 except Exception as ex:
                     utilities_general.printlogexception(ex=ex)  
             
@@ -3070,6 +3291,7 @@ class MainWindow():
                     if(self.indiceposition>=10):
                         self.indiceposition = 0
                     if(global_settings.pathpdfatual!=newpath):
+                        pdfantigo = global_settings.pathpdfatual
                         self.docInnerCanvas.delete("quad")
                         self.docInnerCanvas.delete("simplesearch")
                         self.docInnerCanvas.delete("obsitem")
@@ -3090,7 +3312,10 @@ class MainWindow():
                             self.maiorw = global_settings.infoLaudo[global_settings.pathpdfatual].pixorgw*self.zoom_x *global_settings.zoom           
                         self.scrolly = round((global_settings.infoLaudo[global_settings.pathpdfatual].pixorgh*self.zoom_x*global_settings.zoom), 16)*global_settings.infoLaudo[global_settings.pathpdfatual].len  - 35
                         self.docInnerCanvas.config(scrollregion=(sobraEspaco, 0, sobraEspaco + (global_settings.infoLaudo[global_settings.pathpdfatual].pixorgw*global_settings.zoom*self.zoom_x), self.scrolly))
-                        self.docInnerCanvas.update_idletasks()                    
+                        if(global_settings.infoLaudo[pdfantigo].zoom_pos!=global_settings.infoLaudo[global_settings.pathpdfatual].zoom_pos):
+                            #global_settings.root.after(1, lambda: self.zoomx(None, None, pdfantigo))
+                            self.zoomx(None, None, pdfantigo)
+                        #self.docInnerCanvas.update_idletasks()                    
                     totalhits = self.treeviewSearches.item(parent, 'text').split(' ')
                     self.ocorrenciasLabel.config(font=global_settings.Font_tuple_Arial_10, text=str(self.treeviewSearches.index(searchresultiid)+1) + ' de ' + totalhits[len(totalhits)-1])
                     self.termosearchVar.set(self.treeviewSearches.item(raiz, 'text'))
@@ -3139,9 +3364,9 @@ class MainWindow():
                     init = posicoes[resultsearch.init]
                     fim = posicoes[resultsearch.fim-1]
                     p0x = init[0]
-                    p0y = (init[1]+5)
+                    p0y = (init[1]+2)
                     p1x = fim[2]
-                    p1y = (fim[3]-5)
+                    p1y = (fim[3]-2)
                     self.prepararParaQuads(pagina, int(p0x), int(p0y), math.ceil((p1x)), int(p1y), color=self.color, tag=["simplesearch"], apagar=False, enhancetext=True, enhancearea=False, alt=False)
                     atual = ((self.vscrollbar.get()[0]*global_settings.infoLaudo[global_settings.pathpdfatual].len))
                     deslocy = (math.floor(pagina) * global_settings.infoLaudo[global_settings.pathpdfatual].pixorgh * self.zoom_x*global_settings.zoom) + (p0y *  self.zoom_x * global_settings.zoom)                    
@@ -3216,7 +3441,10 @@ class MainWindow():
     def clearSelectedTextByCLick(self, tipo, event):       
        try:
            if(event.widget!=None):
-               event.widget.focus_set()           
+               try:
+                   event.widget.focus_set()      
+               except:
+                   None
            if(isinstance(event.widget, classes_general.CustomCanvas) or isinstance(event.widget, classes_general.CustomFrame)):
                self.docInnerCanvas.focus_set()
                posicaoRealY0Canvas = self.vscrollbar.get()[0] * (self.scrolly) + event.y
@@ -3301,11 +3529,13 @@ class MainWindow():
                                                          except Exception as ex:
                                                              None
                                                          global_settings.docatual=fitz.open(arquivo)
-                                                     retorno = utilities_general.processDocXREF(arquivo, global_settings.docatual, aprocurar)                                                     
+                                                     retorno = utilities_general.processDocXREF(arquivo, global_settings.docatual, aprocurar)    
                                                      if(retorno!=None):                                                 
                                                          to = retorno[3]
                                                          page_dest = int(retorno[1])
+                                                         pdfantigo = global_settings.pathpdfatual
                                                          if(arquivo!=global_settings.pathpdfatual):
+                                                             
                                                              sobraEspaco = 0
                                                              if(self.docFrame.winfo_width() > global_settings.infoLaudo[global_settings.pathpdfatual].pixorgw * self.zoom_x * global_settings.zoom):
                                                                  sobraEspaco = self.docInnerCanvas.winfo_x()  
@@ -3322,12 +3552,18 @@ class MainWindow():
                                                              self.scrolly = round((global_settings.infoLaudo[global_settings.pathpdfatual].pixorgh*self.zoom_x*global_settings.zoom), 16)*global_settings.infoLaudo[global_settings.pathpdfatual].len  - 35
                                                              self.docInnerCanvas.config(scrollregion=(sobraEspaco, 0, sobraEspaco+ (global_settings.infoLaudo[global_settings.pathpdfatual].pixorgw*global_settings.zoom*self.zoom_x), self.scrolly))                
                                                              self.treeviewEqs.selection_set(global_settings.pathpdfatual)
+                                                             
                                                          ondeir = (page_dest) / global_settings.infoLaudo[global_settings.pathpdfatual].len + (to / (global_settings.infoLaudo[global_settings.pathpdfatual].pixorgh*global_settings.infoLaudo[global_settings.pathpdfatual].len))
                                                          self.positions[self.indiceposition] = (global_settings.pathpdfatual, self.vscrollbar.get()[0])
                                                          self.indiceposition += 1
                                                          if(self.indiceposition>=10):
                                                              self.indiceposition = 0
+                                                         if(global_settings.infoLaudo[pdfantigo].zoom_pos!=global_settings.infoLaudo[global_settings.pathpdfatual].zoom_pos):
+                                                             #global_settings.root.after(1, lambda: self.zoomx(None, None, pdfantigo))
+                                                             self.zoomx(None, None, pdfantigo)
                                                          self.docInnerCanvas.yview_moveto(ondeir)
+                                                         #global_settings.root.after(1, lambda: self.docInnerCanvas.yview_moveto(ondeir))
+                                                         
                                                          if(str(page_dest+1)!=self.pagVar.get()):
                                                              self.pagVar.set(str(page_dest+1))
                                                          if("mm.chat" in aprocurar and not texto==""):
@@ -3335,7 +3571,8 @@ class MainWindow():
                                                              regexdatahora = "([0-9]{2}\/[0-9]{2}\/[0-9]{4})\s+([0-9]{2}\:[0-9]{2}\:[0-9]{2})"
                                                              datahora = re.findall(regexdatahora, texto)
                                                              texto = "["+datahora[0][0]+" "+datahora[0][1]+"]"
-                                                             global_settings.root.after(150, lambda: self.dosearchsimple('next', termo=texto))
+                                                             global_settings.root.after(100, lambda: self.dosearchsimple('next', termo=texto))
+                                                         
                                                              
                                                  else:
                                                      if plt == "Linux":
@@ -3480,11 +3717,12 @@ class MainWindow():
     def pintarQuads(self, pagina, p0x, p0y, p1x, p1y, sobraEspaco, enhancetext=False, enhancearea=False, color=None, tag=["quad"], \
                     apagar=True, custom=False, altpressed=False, withborder=True, alt=True):
 
-        
-  
+        if(p1y-p0y<=3):
+            p0y -=1
+            p1y +=1 
         quads_on_canvas = []
         try:
-            global_settings.zoom = global_settings.listaZooms[global_settings.posicaoZoom]
+            global_settings.zoom = global_settings.listaZooms[global_settings.infoLaudo[global_settings.pathpdfatual].zoom_pos]
             global_settings.infoLaudo[global_settings.pathpdfatual].retangulosDesenhados[pagina] = {}            
             if(enhancetext):                
                 global_settings.infoLaudo[global_settings.pathpdfatual].retangulosDesenhados[pagina]['text']=[]
@@ -3493,7 +3731,7 @@ class MainWindow():
                     y0b = block[1]
                     x1b = block[2]
                     y1b = block[3]
-                    if(self.altpressed and alt):
+                    if(self.altpressed or alt):
                         
                         for line in global_settings.infoLaudo[global_settings.pathpdfatual].mapeamento[pagina][block]:
                             
@@ -3757,6 +3995,7 @@ class MainWindow():
                                         quads_on_canvas.append(r)
                                         global_settings.infoLaudo[global_settings.pathpdfatual].retangulosDesenhados[pagina]['text'].append((line, r))
                             else:
+                                #continue
                                 p0y += 1
                                 for line in global_settings.infoLaudo[global_settings.pathpdfatual].mapeamento[pagina][block]:
                                     
@@ -3827,7 +4066,7 @@ class MainWindow():
         
 
     def prepararParaQuads(self, pagina, posicaoRealX0, posicaoRealY0, posicaoRealX1, posicaoRealY1, \
-                          color=(21, 71, 150, 85),tag=["quad"], apagar=True, enhancetext=False, enhancearea=False, withborder=True, alt=True, first=True):        
+                          color=(21, 71, 150, 85),tag=["quad"], apagar=True, enhancetext=False, enhancearea=False, withborder=True, alt=False, first=True):        
         margemsup = (global_settings.infoLaudo[global_settings.pathpdfatual].mt/25.4)*72
         margeminf = global_settings.infoLaudo[global_settings.pathpdfatual].pixorgh-((global_settings.infoLaudo[global_settings.pathpdfatual].mb/25.4)*72)
         margemesq = (global_settings.infoLaudo[global_settings.pathpdfatual].me/25.4)*72
@@ -3839,7 +4078,8 @@ class MainWindow():
                                                                              enhancearea=enhancearea, withborder=withborder, alt=alt, first=False))
         else:  
             if("enhanceobs" in tag[0]):
-                listaquads = self.docInnerCanvas.find_withtag(tag[1])
+                listaquads = self.docInnerCanvas.find_withtag(tag[2])
+                #alt = Tru
                 if(len(listaquads)>0):
                     return []
             elif("enhanceannot" in tag[0]):
@@ -3871,14 +4111,11 @@ class MainWindow():
                 p1y = posicaoRealY0
                 
             
-            sobraEspaco = self.docInnerCanvas.winfo_x()           
-            p0x = max(p0x, margemesq)
-            p0y = max(p0y, margemsup)
-            p1x = min(p1x, margemdir)
-            p1y = min(p1y, margeminf)
+            sobraEspaco = self.docInnerCanvas.winfo_x()   
+            
+            
             quads_on_canvas = self.pintarQuads(pagina=pagina, p0x=p0x, p0y=p0y, p1x=p1x, p1y=p1y, sobraEspaco=sobraEspaco, color=color, apagar=apagar, \
                              custom=False, tag=tag, altpressed=self.altpressed and alt, enhancetext=enhancetext, enhancearea=enhancearea, withborder=withborder, alt=alt)
-            #print(quads_on_canvas)
             return quads_on_canvas
         
     def scrollByMouseOutCanvas(self, dif):
@@ -3964,6 +4201,9 @@ class MainWindow():
                         origemx=self.initialPos[2]
                         origemx1=posicaoRealX1
                     
+                    tags = ["quad"]
+                    if(self.altpressed):
+                        tags.append("withalt")
                     for p in range(pp, up+1):
                         posicoes_normalizadas = self.normalize_positions(p, pp, up, \
                                                  p0x, p0y, p1x, p1y)
@@ -3971,8 +4211,9 @@ class MainWindow():
                         posicaoRealY0 = posicoes_normalizadas[1]
                         posicaoRealX1 = posicoes_normalizadas[2]
                         posicaoRealY1 = posicoes_normalizadas[3]
+                        
                         self.prepararParaQuads(p, posicaoRealX0=posicaoRealX0, posicaoRealY0=posicaoRealY0, posicaoRealX1=posicaoRealX1, posicaoRealY1=posicaoRealY1, \
-                                               color=(21, 71, 150, 85),tag=["quad"], apagar=True, enhancetext=self.selectionActive, enhancearea=self.areaselectionActive)
+                                               color=(21, 71, 150, 85),tag=tags, apagar=True, enhancetext=self.selectionActive, enhancearea=self.areaselectionActive)
                 else:
                     None
             else:
@@ -3981,7 +4222,7 @@ class MainWindow():
             utilities_general.printlogexception(ex=ex)
         
     def doubleClickSelection(self, evento):         
-         global_settings.zoom = global_settings.listaZooms[global_settings.posicaoZoom]
+         global_settings.zoom = global_settings.listaZooms[global_settings.infoLaudo[global_settings.pathpdfatual].zoom_pos]
          if(isinstance(evento.widget, tkinter.Canvas)):
                 self.docInnerCanvas.delete("simplesearch")
                 self.docInnerCanvas.delete("quad")
@@ -4047,19 +4288,29 @@ class MainWindow():
     def _clearClick(self, event):
         self.initialPos = None
     
-    def zoomx(self, event=None, tipozoom=None):
-        if((tipozoom=='plus' and global_settings.posicaoZoom < len(global_settings.listaZooms)-1) or (tipozoom=='minus' and global_settings.posicaoZoom > 0)):
+    def zoomx(self, event=None, tipozoom='', pathpdfantigo = None, moveto = None):
+        
+        if((tipozoom=='plus' and global_settings.infoLaudo[global_settings.pathpdfatual].zoom_pos < len(global_settings.listaZooms)-1) \
+           or (tipozoom=='minus' and global_settings.infoLaudo[global_settings.pathpdfatual].zoom_pos > 0) or
+           pathpdfantigo != None):
+            
             self.winfox = self.docInnerCanvas.winfo_x()
-            valor = self.vscrollbar.get()[0]
+            valor = moveto
+            if(valor == None):
+                valor = self.vscrollbar.get()[0]
             for k in range(global_settings.minMaxLabels):
                 self.docInnerCanvas.itemconfig(self.ininCanvasesid[k], image = None)
                 self.tkimgs[k] = None
-            oldzoom = global_settings.listaZooms[global_settings.posicaoZoom]
-            if(tipozoom=='plus'):
-                global_settings.posicaoZoom += 1
+            oldzoom = global_settings.listaZooms[global_settings.infoLaudo[global_settings.pathpdfatual].zoom_pos]
+            if(pathpdfantigo!=None):
+                oldzoom = global_settings.listaZooms[global_settings.infoLaudo[pathpdfantigo].zoom_pos]
             else:
-                global_settings.posicaoZoom -= 1
-            global_settings.zoom = global_settings.listaZooms[global_settings.posicaoZoom]
+                global_settings.infoLaudo[global_settings.pathpdfatual].something_changed = True
+            if(tipozoom=='plus'):
+                global_settings.infoLaudo[global_settings.pathpdfatual].zoom_pos += 1
+            elif(tipozoom=='minus'):
+                global_settings.infoLaudo[global_settings.pathpdfatual].zoom_pos -= 1
+            global_settings.zoom = global_settings.listaZooms[global_settings.infoLaudo[global_settings.pathpdfatual].zoom_pos]
 
             self.mat = fitz.Matrix(self.zoom_x*global_settings.zoom, self.zoom_x*global_settings.zoom)
             
@@ -4091,7 +4342,6 @@ class MainWindow():
                 listaobs = self.docInnerCanvas.find_withtag("obsitem")
                 #listaenhanceobs = self.docInnerCanvas.find_withtag("enhanceobs")
                 self.clearEnhanceObs() 
-                #print(listaenhanceobs)
                 #listaenhanceannots = self.docInnerCanvas.find_withtag("enhanceannots")
                 self.clearSomeImages(["simplesearch", "quad", "link", "obsitem", "enhanceobs", "enhanceannot"])
                 for quadelement in listasimplesearch:
@@ -4237,6 +4487,9 @@ class MainWindow():
                 if(termo==""):
                     termo= self.simplesearchvar.get()
                 if(len(termo)<3):
+                    self.window_search_info.window.withdraw()
+                    utilities_general.below_right(utilities_general.popup_window('<{}> - O termo pesquisado deve possuir 3 caracteres ou mais!'.format(termo), False),\
+                                                      self.docInnerCanvas.winfo_rooty())
                     return
                 self.simplesearching = True
                 
@@ -4620,8 +4873,8 @@ class MainWindow():
                             posicaoRealY1 = posicoes_normalizadas[3]
                             iiditem = observation.idobs 
                             self.prepararParaQuads(p, posicaoRealX0, posicaoRealY0, posicaoRealX1, posicaoRealY1, self.colorenhancebookmark, \
-                                                   tag=['enhanceobs'+global_settings.pathpdfatual+str(p),'enhanceobs'+str(iiditem), 'enhanceobs'], apagar=False,  \
-                                                       enhancetext=enhancetext, enhancearea=enhancearea, withborder=False, alt=False)
+                                                   tag=['enhanceobs'+global_settings.pathpdfatual+str(p),'enhanceobs'+str(iiditem), 'enhanceobs'+str(iiditem)+str(p),'enhanceobs'], apagar=False,  \
+                                                       enhancetext=enhancetext, enhancearea=enhancearea, withborder=False, alt=observation.withalt)
 
                     for annot in observation.annotations:
                         annotation = observation.annotations[annot]
@@ -4637,7 +4890,8 @@ class MainWindow():
                                 posicaoRealX1 = posicoes_normalizadas[2]+2
                                 posicaoRealY1 = posicoes_normalizadas[3]+2
                                 self.prepararParaQuads(p, posicaoRealX0, posicaoRealY0, posicaoRealX1, posicaoRealY1, self.colorenhanceannotation, \
-                                                       tag=['enhanceannot'+global_settings.pathpdfatual+str(p),str(iiditem)+'enhanceannot'+str(idannot), 'enhanceannot'], apagar=False,  \
+                                                       tag=['enhanceannot'+global_settings.pathpdfatual+str(p),str(iiditem)+'enhanceannot'+str(idannot)\
+                                                            , 'enhanceannot'], apagar=False,  \
                                                            enhancetext=False, enhancearea=True, withborder=True, alt=False)
                                 
     
@@ -4726,7 +4980,7 @@ class MainWindow():
                             pix = None
                             images.append(imgdata)
                 if(len(images) > 0):
-                    imagem = self.concatVertical(images)
+                    imagem = utilities_general.concatVertical(images)
                     if platform.system() == 'Darwin':       # macOS
                         None
                     elif platform.system() == 'Windows':    # Windows
@@ -4790,15 +5044,18 @@ class MainWindow():
         progressindex = ttk.Progressbar(addingmarkers, mode='indeterminate')
         progressindex.grid(row=1, column=0, sticky='ew', pady=5)
         progressindex.start()
-        self.checkWhenAddSeveralIsDone(addserveralobs, listadeitenscompleto, idobscat, addingmarkers)
+        self.checkWhenAddSeveralIsDone(addserveralobs, listadeitenscompleto, idobscat, addingmarkers, None)
         
     def qualIndexTreeObs(self, paginaAinserir, p0yarg, imediateParent, name=None):
+   
         children = self.treeviewObs.get_children(imediateParent)
         index = 0
+            
         if(len(children)>0):
             for child in children:
                 valores = self.treeviewObs.item(child, 'values')
                 texto = self.treeviewObs.item(child, 'text')
+                
                 if(name!=None):
                     if(texto > name):
                         return index
@@ -4819,22 +5076,26 @@ class MainWindow():
             return index
         
         
-    def checkWhenAddSeveralIsDone(self, processo, lista, idobscat, addingmarkers):
+    def checkWhenAddSeveralIsDone(self, processo, lista, idobscat, addingmarkers, doctemppdf):
         if(processo.is_alive()):
-            global_settings.root.after(1000, lambda: self.checkWhenAddSeveralIsDone(processo, lista, idobscat, addingmarkers))
+            global_settings.root.after(1000, lambda: self.checkWhenAddSeveralIsDone(processo, lista, idobscat, addingmarkers, doctemppdf))
         else:
             try:
                 addingmarkers.destroy()
             except:
                 None
             try:
+                doctemp = None
                 sqliteconn =  utilities_general.connectDB(str(global_settings.pathdb), 5)
+                cursor = None
                 try:
                     if(sqliteconn==None):
                         utilities_general.popup_window("O banco de dados está ocupado.\n A operação não foi concluída, tente novamente em alguns segundos.", False)
                         return
                     processo.join()  
                     textoobscat = self.treeviewObs.item(idobscat, 'values')[2]  
+                    cursor = sqliteconn.cursor() 
+                    #listaobsitens_add = []
                     for itensproc in lista:
                         p0x = itensproc[0]
                         p0y = itensproc[1]
@@ -4843,7 +5104,7 @@ class MainWindow():
                         tipo = 'texto'
                         paginainit = itensproc[4]
                         paginafim  = itensproc[4]
-                        cursor = sqliteconn.cursor() 
+                        
                         cursor.custom_execute("PRAGMA foreign_keys = ON")
                         iid = idobscat
                         insert_query_pdf = """INSERT INTO Anexo_Eletronico_Obsitens
@@ -4858,7 +5119,7 @@ class MainWindow():
                         cursor.custom_execute("PRAGMA journal_mode=WAL")
                         cursor.custom_execute(insert_query_pdf, (iid, id_pdf, paginainit, p0x, p0y, paginafim, p1x, p1y, tipo, fixo, '',))
                         iiditem = str(cursor.lastrowid)
-                        cursor.close()
+                        #cursor.close()
                         pathpdf = utilities_general.get_normalized_path(itensproc[5])
                         if(pathpdf in global_settings.infoLaudo and pathpdf not in self.allobs):
                             self.allobs[pathpdf] = []
@@ -4866,12 +5127,19 @@ class MainWindow():
                         #treeobs_insert(self, tipo, fixo, paginainit, paginafim, basepdf, p0x, p0y, p1x, p1y, tocpdf, idobscat, idobsitem, ident)
                         tocpdf = global_settings.infoLaudo[pathpdf].toc
                         self.treeobs_insert(tipo, 1, paginainit, paginafim, pathpdf, p0x, p0y, p1x, p1y, tocpdf, iid, iiditem,ident = ' ')
-                        links_tratados = utilities_general.extract_links_from_page(global_settings.docatual, id_pdf, iiditem, global_settings.pathpdfatual,\
+                        
+                        if(pathpdf!=doctemppdf):
+                            if(doctemp!=None):
+                                doctemp.close()
+                                
+                            doctemp = fitz.open(pathpdf)
+                            doctemppdf = pathpdf
+                        links_tratados = utilities_general.extract_links_from_page(doctemp, id_pdf, iiditem, global_settings.pathpdfatual,\
                                                                                    paginainit, paginafim, p0x, p0y, p1x, p1y)
                         insert_annot = '''INSERT INTO Anexo_Eletronico_Annotations
                                                  (id_pdf, id_obs, paginainit, p0x, p0y, paginafim, p1x, p1y, link, conteudo) VALUES
                                                  (?,?,?,?,?,?,?,?,?,?)'''
-                        cursor.custom_execute("PRAGMA journal_mode=WAL")
+                        #cursor.custom_execute("PRAGMA journal_mode=WAL")
                         annotation_list = {}
                         for link_t in links_tratados:
                             cursor.custom_execute(insert_annot, link_t)
@@ -4894,63 +5162,79 @@ class MainWindow():
                         self.allobs[pathpdf].append(obsobject)
                         self.allobsbyitem['obsitem'+str(iiditem)] = obsobject
                         
-                        
+                    #cursor.close()    
                     sqliteconn.commit()
                 except Exception as ex:
                     utilities_general.printlogexception(ex=ex)
                 finally:
                     #cursor.close()
+                    if(doctemp!=None):
+                        doctemp.close()
                     if(sqliteconn):
                         sqliteconn.close()
             except sqlite3.OperationalError:
-                global_settings.root.after(1000, lambda: self.checkWhenAddSeveralIsDone(processo, lista, idobscat))                                           
+                global_settings.root.after(1000, lambda: self.checkWhenAddSeveralIsDone(processo, lista, idobscat, doctemppdf))                                           
     
-    def treeobs_insert(self, tipo, fixo, paginainit, paginafim, basepdf, p0x, p0y, p1x, p1y, tocpdf, idobscat, idobsitem, ident):
+    def treeobs_insert(self, tipo, fixo, paginainit, paginafim, basepdf, p0x, p0y, p1x, p1y, tocpdf, idobscat, idobsitem, ident, tag_alt=''):
+       
         idobscat = str(idobscat)
+        tags_to_item =None
+        if(tag_alt!=''):
+            tags_to_item = ('obsitem', 'obsitem'+str(idobsitem), tag_alt,)
+        else:
+            tags_to_item = ('obsitem', 'obsitem'+str(idobsitem),)
         #idobsitem = str(idobsitem)
         try:
-            tocname = utilities_general.locateToc(paginainit, basepdf, p0y=p0y, tocpdf=tocpdf)
+            tocx = utilities_general.locateToc(paginainit, basepdf, p0y=p0y, tocpdf=tocpdf)
+            tocname = tocx[0]
             if(not self.treeviewObs.exists(idobscat+basepdf)):
                 indexrelobs = self.qualIndexTreeObs( None, None,idobscat, ident+os.path.basename(basepdf))
                 self.treeviewObs.insert(parent=idobscat, iid=idobscat+basepdf, text=ident+os.path.basename(basepdf), index=indexrelobs, tag=('relobs'))
                 self.treeviewObs.tag_configure('relobs', background='#e3e1e1')
             if(not self.treeviewObs.exists(idobscat+basepdf+tocname)):
-                indextocobs = self.qualIndexTreeObs( None, None,idobscat+basepdf, ident+ident+tocname)
-                self.treeviewObs.insert(parent=idobscat+basepdf, iid=idobscat+basepdf+tocname, text=ident+ident+tocname, index=indextocobs, tag=('tocobs'))
+                indextocobs = self.qualIndexTreeObs(tocx[1], tocx[2],idobscat+basepdf)
+                self.treeviewObs.insert(parent=idobscat+basepdf, iid=idobscat+basepdf+tocname, text=ident+ident+tocname,\
+                                        index=indextocobs, tag=('tocobs'), values=(0,0,tocx[1],0, tocx[2]))
             indexinserir = self.qualIndexTreeObs(paginainit, p0y, (idobscat+basepdf+tocname))
+            
             if(paginainit==paginafim):
                 labeltext = ident+ident+ident+'Pg.'+str(paginainit+1)+' - '+ os.path.basename(basepdf)
                 self.treeviewObs.insert(parent=(idobscat+basepdf+tocname), index=indexinserir, iid='obsitem'+str(idobsitem), text=labeltext,\
                                 image=global_settings.itemimage, \
                                     values=(tipo, basepdf,str(paginainit), str(p0x), str(p0y), str(paginafim), str(p1x), str(p1y), idobsitem, str(fixo), idobscat, '',),\
-                                    tag=('obsitem', 'obsitem'+str(idobsitem),))
+                                    tag=tags_to_item)
             else:
                 self.treeviewObs.insert(parent=(idobscat+basepdf+tocname), index=indexinserir, iid='obsitem'+str(idobsitem), \
                                         text=ident+ident+ident+'Pg.'+str(paginainit+1)+' - '+'Pg.'+str(paginafim+1)+' - '+os.path.basename(basepdf), \
                                 image=global_settings.itemimage, \
                                     values=(tipo, basepdf,str(paginainit), str(p0x), str(p0y), str(paginafim), str(p1x), str(p1y), idobsitem, str(fixo), idobscat, '',), \
-                                            tag=('obsitem', 'obsitem'+str(idobsitem),))
+                                            tag=tags_to_item)
         except Exception as ex:
-            utilities_general.printlogexception(ex=ex)
+            #utilities_general.printlogexception(ex=ex)
             if(not self.treeviewObs.exists(idobscat+basepdf)):
                 indexrelobs = self.qualIndexTreeObs( None, None,idobscat, os.path.basename(basepdf))
                 self.treeviewObs.insert(parent=idobscat, iid=(idobscat+basepdf), text=os.path.basename(basepdf), index=indexrelobs, tag=('relobs'))
                 self.treeviewObs.tag_configure('relobs', background='#e3e1e1')
             indexinserir = self.qualIndexTreeObs( paginainit, p0y, (idobscat+basepdf))
+            
             if(paginainit==paginafim):
                 self.treeviewObs.insert(parent=(idobscat+basepdf), index=indexinserir, iid='obsitem'+str(idobsitem), text=ident+ident+'Pg.'+str(paginainit+1)+' - '+\
                                         os.path.basename(basepdf), \
                                 image=global_settings.itemimage, \
                                     values=(tipo, basepdf,str(paginainit), str(p0x), str(p0y), str(paginafim), str(p1x), str(p1y), idobsitem, str(fixo), idobscat, '',),\
-                                        tag=('obsitem',))
+                                        tag=tags_to_item)
             else:
                 self.treeviewObs.insert(parent=(idobscat+basepdf), index=indexinserir, iid='obsitem'+str(idobsitem), text=ident+ident+'Pg.'+str(paginainit+1)\
                                         +' - '+'Pg.'+str(paginafim+1)+' - '+os.path.basename(basepdf), \
                                 image=global_settings.itemimage,\
                                     values=(tipo, basepdf,str(paginainit), str(p0x), str(p0y), str(paginafim), str(p1x), str(p1y), idobsitem, str(fixo), idobscat, '',),\
-                                       tag=('obsitem', 'obsitem'+str(idobsitem),) )
+                                       tag=tags_to_item )
     
     def addmarkerFromSearch(self, idobscat, event, first=True):
+        if(idobscat==None):
+           idobscat, obscat  = self.add_edit_category('add','')
+        if(idobscat==None):
+           return
         item = self.treeviewSearches.identify_row(event.y)
         children = self.treeviewSearches.get_children(item)
         if(len(children)>0 and first):
@@ -4964,6 +5248,7 @@ class MainWindow():
             else:
                 try:
                     sqliteconn =  utilities_general.connectDB(str(global_settings.pathdb), 5)
+                    cursor = sqliteconn.cursor() 
                     try:
                         if(sqliteconn==None):
                             utilities_general.popup_window("O banco de dados está ocupado.\n A operação não foi concluída, tente novamente em alguns segundos.", False)
@@ -4981,10 +5266,10 @@ class MainWindow():
                         tipo = 'texto'
                         paginainit = pagina
                         paginafim  = pagina    
-                        cursor = sqliteconn.cursor() 
+                        
                         cursor.custom_execute("PRAGMA foreign_keys = ON")
                         insert_query_pdf = """INSERT INTO Anexo_Eletronico_Obsitens
-                                                (id_obscat, id_pdf, paginainit, p0x, p0y, paginafim, p1x, p1y, tipo, fixo, conteudo VALUES
+                                                (id_obscat, id_pdf, paginainit, p0x, p0y, paginafim, p1x, p1y, tipo, fixo, conteudo) VALUES
                                                 (?,?,?,?,?,?,?,?,?,?,?)
                         """
                         fixo = 0
@@ -4995,7 +5280,7 @@ class MainWindow():
                         cursor.custom_execute("PRAGMA journal_mode=WAL")
                         cursor.custom_execute(insert_query_pdf, (idobscat, id_pdf, paginainit, p0x, p0y, paginafim, p1x, p1y, tipo, fixo, '',))
                         iiditem = str(cursor.lastrowid)
-                        cursor.close()
+                        #cursor.close()
                         basepdf = utilities_general.get_normalized_path(resultsearch.pathpdf)
                         ident = ' '
                         pathpdf = utilities_general.get_normalized_path(basepdf)
@@ -5006,7 +5291,7 @@ class MainWindow():
                         insert_annot = '''INSERT INTO Anexo_Eletronico_Annotations
                                                  (id_pdf, id_obs, paginainit, p0x, p0y, paginafim, p1x, p1y, link, conteudo) VALUES
                                                  (?,?,?,?,?,?,?,?,?,?)'''
-                        cursor.custom_execute("PRAGMA journal_mode=WAL")
+                        #cursor.custom_execute("PRAGMA journal_mode=WAL")
                         annotation_list = {}
                         for link_t in links_tratados:
                             cursor.custom_execute(insert_annot, link_t)
@@ -5088,6 +5373,9 @@ class MainWindow():
         p1y = None
         paginainit = min(global_settings.infoLaudo[global_settings.pathpdfatual].retangulosDesenhados)
         paginafim = max(global_settings.infoLaudo[global_settings.pathpdfatual].retangulosDesenhados)
+        withalt = False
+        if(len(self.docInnerCanvas.find_withtag('withalt'))):
+            withalt = True
         if(self.selectionActive):
             tipo = 'texto'
             pagina =paginainit
@@ -5110,7 +5398,8 @@ class MainWindow():
             p0y = global_settings.infoLaudo[global_settings.pathpdfatual].retangulosDesenhados[paginainit]['areaSelection'][0][1].y0         
             p1x = global_settings.infoLaudo[global_settings.pathpdfatual].retangulosDesenhados[paginafim]['areaSelection'][0][1].x1
             p1y = global_settings.infoLaudo[global_settings.pathpdfatual].retangulosDesenhados[paginafim]['areaSelection'][0][1].y1 
-            tipo = 'area'   
+            tipo = 'area' 
+
         try:
             sqliteconn =  utilities_general.connectDB(str(global_settings.pathdb), 5)
             try:
@@ -5120,13 +5409,13 @@ class MainWindow():
                 cursor = sqliteconn.cursor()   
                 cursor.custom_execute("PRAGMA journal_mode=WAL")
                 insert_query_pdf = """INSERT INTO Anexo_Eletronico_Obsitens
-                                        (id_obscat, id_pdf, paginainit, p0x, p0y, paginafim, p1x, p1y, tipo, fixo, conteudo) VALUES
-                                        (?,?,?,?,?,?,?,?,?,?,?)
+                                        (id_obscat, id_pdf, paginainit, p0x, p0y, paginafim, p1x, p1y, tipo, fixo, conteudo, withalt) VALUES
+                                        (?,?,?,?,?,?,?,?,?,?,?,?)
                 """
                 
                 relpath = os.path.relpath(global_settings.pathpdfatual, global_settings.pathdb.parent)
                 id_pdf = global_settings.infoLaudo[global_settings.pathpdfatual].id
-                cursor.custom_execute(insert_query_pdf, (idobscat, id_pdf, paginainit, p0x, p0y, paginafim, p1x, p1y, tipo, 1, conteudo,))
+                cursor.custom_execute(insert_query_pdf, (idobscat, id_pdf, paginainit, p0x, p0y, paginafim, p1x, p1y, tipo, 1, conteudo, 1 if withalt else False,))
                 iiditem = str(cursor.lastrowid)
                 links_tratados = utilities_general.extract_links_from_page(global_settings.docatual, id_pdf, iiditem, global_settings.pathpdfatual,\
                                                                            paginainit, paginafim, p0x, p0y, p1x, p1y)
@@ -5153,7 +5442,7 @@ class MainWindow():
                 textoobscat = self.treeviewObs.item(idobscat, 'values')[2]
            # def __init__(self, paginainit, paginafim, p0x, p0y, p1x, p1y, tipo, pathpdf, idobs, idobscat, obscat, conteudo, anottations):
                 obsobject = classes_general.Observation(paginainit, paginafim, p0x, p0y, p1x, p1y, tipo,\
-                                                        global_settings.pathpdfatual, iiditem, idobscat, conteudo, annotation_list)
+                                                        global_settings.pathpdfatual, iiditem, idobscat, conteudo, annotation_list, withalt)
                 cursor.close() 
                 sqliteconn.commit()
                 try:
@@ -5173,10 +5462,10 @@ class MainWindow():
                     posicaoRealY0 = posicoes_normalizadas[1]
                     posicaoRealX1 = posicoes_normalizadas[2]
                     posicaoRealY1 = posicoes_normalizadas[3]
-                    tags = ['enhanceobs'+global_settings.pathpdfatual+str(p),'enhanceobs'+str(iiditem), 'enhanceobs']
+                    tags = ['enhanceobs'+global_settings.pathpdfatual+str(p),'enhanceobs'+str(iiditem), 'enhanceobs'+str(iiditem)+str(p), 'enhanceobs']
                     self.prepararParaQuads(p, posicaoRealX0, posicaoRealY0, posicaoRealX1, posicaoRealY1, color=self.colorenhancebookmark, \
                                            tag=tags, apagar=False, \
-                                               enhancetext=enhancetext, enhancearea=enhancearea, withborder=False, alt=False)
+                                               enhancetext=enhancetext, enhancearea=enhancearea, withborder=False, alt=withalt)
                 basepdf = utilities_general.get_normalized_path(global_settings.pathpdfatual)
                 pathpdf = utilities_general.get_normalized_path(basepdf)
                 if(pathpdf in global_settings.infoLaudo and pathpdf not in self.allobs):
@@ -5340,8 +5629,10 @@ class MainWindow():
             self.labeldocframe.grid(row=2, column=0, sticky='ew')
             self.labeldocframe.rowconfigure(0, weight=1)
             self.labeldocframe.columnconfigure((0,1), weight=1)
+            global_settings.label_warning_error = tkinter.Label(self.labeldocframe, bg="#%02x%02x%02x" % (145, 145, 145), font=global_settings.Font_tuple_Arial_10, text=" ")
+            global_settings.label_warning_error.grid(row=0, column=0, sticky='w')
             self.labeldocname = tkinter.Label(self.labeldocframe, font=global_settings.Font_tuple_Arial_10, text="")
-            self.labeldocname.grid(row=0, column=0, sticky='ew')
+            self.labeldocname.grid(row=0, column=0, sticky='ns')
             self.labelmousepos = tkinter.Label(self.labeldocframe, font=global_settings.Font_tuple_Arial_10, text="")
             self.labelmousepos.grid(row=0, column=1, sticky='e')
             self.docInnerCanvas.bind("<MouseWheel>", self._on_mousewheel)
@@ -5446,6 +5737,7 @@ class MainWindow():
                 novoscroll = self.positions[temp][1]
                 self.positions[self.indiceposition] = (global_settings.pathpdfatual, self.vscrollbar.get()[0])
                 if(global_settings.pathpdfatual!=newpath):
+                    pdfantigo = global_settings.pathpdfatual
                     for i in range(global_settings.minMaxLabels):
                         global_settings.processed_pages[i] = -1
                     sobraEspaco = 0
@@ -5470,13 +5762,18 @@ class MainWindow():
                     self.clearAllImages()
                     self.totalPgg.config(font=global_settings.Font_tuple_Arial_10, text="/ "+str(global_settings.infoLaudo[global_settings.pathpdfatual].len))                    
                     for pdf in global_settings.infoLaudo:
-                        global_settings.infoLaudo[pdf].retangulosDesenhados = {}  
-                novoscroll = self.positions[temp][1]
+                        global_settings.infoLaudo[pdf].retangulosDesenhados = {}
+                    if(global_settings.infoLaudo[pdfantigo].zoom_pos!=global_settings.infoLaudo[global_settings.pathpdfatual].zoom_pos):
+                        #global_settings.root.after(1, lambda: self.zoomx(None, None, pdfantigo))
+                        self.zoomx(None, None, pdfantigo)
+                #novoscroll = self.positions[temp][1]
+                #global_settings.root.after(1, self.docInnerCanvas.yview_moveto(novoscroll))
                 self.docInnerCanvas.yview_moveto(novoscroll)
+                
                 pagina = round(novoscroll*global_settings.infoLaudo[newpath].len)
                 if(str(pagina+1)!=self.pagVar.get()):
                     self.pagVar.set(str(pagina+1))
-                #self.totalPgg.config(font=global_settings.Font_tuple_Arial_10, text="/ "+str(global_settings.infoLaudo[global_settings.pathpdfatual].len))
+                self.totalPgg.config(font=global_settings.Font_tuple_Arial_10, text="/ "+str(global_settings.infoLaudo[global_settings.pathpdfatual].len))
                 self.indiceposition += 1
                 if(self.indiceposition>9):
                     self.indiceposition = 0
@@ -5493,6 +5790,7 @@ class MainWindow():
                 novoscroll = self.positions[temp][1]
                 self.positions[self.indiceposition] = (global_settings.pathpdfatual, self.vscrollbar.get()[0])
                 if(global_settings.pathpdfatual!=newpath):
+                    pdfantigo = global_settings.pathpdfatual
                     for i in range(global_settings.minMaxLabels):
                         global_settings.processed_pages[i] = -1
                     sobraEspaco = 0
@@ -5517,14 +5815,20 @@ class MainWindow():
                     self.clearAllImages()
                     self.totalPgg.config(font=global_settings.Font_tuple_Arial_10, text="/ "+str(global_settings.infoLaudo[global_settings.pathpdfatual].len))                    
                     for pdf in global_settings.infoLaudo:
-                        global_settings.infoLaudo[pdf].retangulosDesenhados = {}      
-                novoscroll = self.positions[temp][1]
+                        global_settings.infoLaudo[pdf].retangulosDesenhados = {} 
+                    if(global_settings.infoLaudo[pdfantigo].zoom_pos!=global_settings.infoLaudo[global_settings.pathpdfatual].zoom_pos):
+                        #global_settings.root.after(1, lambda: self.zoomx(None, None, pdfantigo))
+                        novoscroll = self.positions[temp][1]
+                        self.zoomx(None, None, pdfantigo)
+                
                 pagina = round(novoscroll*global_settings.infoLaudo[newpath].len)
+                
+                global_settings.root.after(1, lambda: self.docInnerCanvas.yview_moveto(novoscroll))
                 self.docInnerCanvas.yview_moveto(novoscroll)
                 if(str(pagina+1)!=self.pagVar.get()):
                     self.pagVar.set(str(pagina+1))
                     
-                #self.totalPgg.config(font=global_settings.Font_tuple_Arial_10, text="/ "+str(global_settings.infoLaudo[global_settings.pathpdfatual].len))
+                self.totalPgg.config(font=global_settings.Font_tuple_Arial_10, text="/ "+str(global_settings.infoLaudo[global_settings.pathpdfatual].len))
                 self.indiceposition -= 1 
                 if(self.indiceposition<0):
                     self.indiceposition = 9
@@ -5568,14 +5872,18 @@ def start_up_app():
             if(".pdf" == extension.lower()):
                 pathp = sys.argv[1]
                 global_settings.pathdb = Path(os.path.abspath(sys.argv[1])+".db")  
-                sqliteconn = utilities_general.connectDB(str(global_settings.pathdb))
+                sqliteconn = None
+                tocommit = False
                 if(not os.path.exists(global_settings.pathdb)):
+                    
+                    #print(1)
                     notindexed = []
                     notindexed.append(pathp)
                     global_settings.splash_window.window.deiconify()
                     global_settings.splash_window.label['text'] = "Criando banco de dados..."
                     global_settings.splash_window.label.update_idletasks()
-                    indexador_fera.createNewDbFile(global_settings.root)         
+                    indexador_fera.createNewDbFile(global_settings.root)   
+                    sqliteconn = utilities_general.connectDB(str(global_settings.pathdb))
                     global_settings.splash_window.label['text'] = "Aguardando definição de margens..."
                     global_settings.splash_window.label.update_idletasks()
                     tupleinfo = indexador_fera.addrels('relatorio', view=None, pathpdfinput = notindexed, \
@@ -5583,6 +5891,8 @@ def start_up_app():
                     global_settings.splash_window.label['text'] = "Carregando ferramenta..."
                     global_settings.splash_window.label.update_idletasks()
                 else:
+                    sqliteconn = utilities_general.connectDB(str(global_settings.pathdb))
+                    #print(2)
                     cursor = sqliteconn.cursor()
                     if(os.path.exists(str(global_settings.pathdb)+'.lock')):
                         window = utilities_general.popup_window(sair=True, texto = \
@@ -5590,7 +5900,12 @@ def start_up_app():
                                      "Para corrigir esse problema:\nVerifique outras execuções utilizando o mesmo banco de dados\n ou \nApague o arquivo <{}>".\
                                          format(str(global_settings.pathdb)+'.lock'))
                         global_settings.root.wait_window(window)                                            
+                    indexador_fera.validate_annotation(sqliteconn, cursor)
+                    must_validate = indexador_fera.necessity_to_validate(cursor)
                     
+                    if(must_validate):
+                        tocommit = indexador_fera.validate_new_db_columns(cursor, must_validate)
+                        indexador_fera.update_db_version(sqliteconn, cursor)
                     notindexed = []
                     select_all_pdfs = '''SELECT  P.id_pdf, P.indexado, P.rel_path_pdf FROM 
                     Anexo_Eletronico_Pdfs P 
@@ -5615,6 +5930,8 @@ def start_up_app():
                         tupleinfo = indexador_fera.addrels('relatorio', pathpdfinput = notindexed, pathdbext=sys.argv[1], rootx=global_settings.root, sqliteconnx=sqliteconn)                            
                         indexing = True
                 #indexador_fera.gather_information_fromdb()
+                if(tocommit):
+                    sqliteconn.commit()
                 utilities_general.initiate_indexing_thread()
                 global_settings.initiate_processes()
                 start_time = time.time()
@@ -5625,6 +5942,7 @@ def start_up_app():
                 if(len(sys.argv) >= 3 and sys.argv[2]=='1'):
                     gotoviewer = True  
                 sqliteconn = utilities_general.connectDB(str(global_settings.pathdb))
+                
                 indexador_fera.gather_information_fromdb(sqliteconn)
                 sqliteconn.close()
                 utilities_general.initiate_indexing_thread()
@@ -5670,8 +5988,8 @@ def start_fera_app():
             finally:
                 if(sqliteconn):
                     sqliteconn.close()            
-            global_settings.posicaoZoom = pos
-            global_settings.zoom = global_settings.listaZooms[global_settings.posicaoZoom]
+            #global_settings.posicaoZoom = pos
+            #global_settings.zoom = global_settings.listaZooms[global_settings.posicaoZoom]
             global_settings.indexingwindow = classes_general.Indexing_window(global_settings.root)
             if(global_settings.indexing_thread!=None and global_settings.indexing_thread.is_alive()):
                 totlendoc = 0
