@@ -56,7 +56,7 @@
  [],
  False,
  False,
- 1648042511,
+ 1650991977,
  [('run.exe',
    'c:\\users\\labinfo\\feraqpdf4\\lib\\site-packages\\PyInstaller\\bootloader\\Windows-64bit\\run.exe',
    'EXECUTABLE')])

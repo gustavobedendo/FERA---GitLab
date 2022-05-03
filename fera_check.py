@@ -4,7 +4,7 @@ Created on Wed Mar 23 15:54:39 2022
 
 @author: labinfo
 """
-import os, platform, re, hashlib, sys
+import os, platform, re, hashlib, sys, mmAssembler
 plt = platform.system()
 
 def get_application_path():
@@ -27,16 +27,40 @@ def md5(path_pdf):
     print(path_pdf, digest)
     return digest
 
-if __name__ == '__main__':   
+def check_version(): 
     regex = r"FERA ([0-9]+)\.([0-9]+)\-([0-9]+)"
     pattern = re.compile(regex)
     if plt == "Linux":
         None
     elif plt=="Windows":        
-        folder = r"\\192.168.10.9\tecnicos\Instaladores\FERA - Forensics Evidence Report Analyzer"
-        for file in os.listdir(folder): 
-            file_abs_path = os.path.join(folder, file)
-            if(os.path.isdir(file_abs_path)):
-                if(pattern.match(file)):
-                    b_version, l_version, date = pattern.findall(file)[0]
-                    print(b_version, l_version, date)
+        try:
+            folder = r"\\Desktop-vqtcb8s\mmassembler_control_version"
+            file_version = os.path.join(folder, "mmassembler_version.txt")
+            version = None
+            release = None
+            date = None
+            
+            with open(file_version) as file:
+                lines = file.readlines()
+                for line in lines:
+                    #if("version=" in line):
+                    #    version = int(line.split("version=")[1])
+                    #if("release=" in line):
+                    #    release = int(line.split("release=")[1])
+                    #if("date=" in line):
+                        date = int(line.split("date=")[1])
+            if(date == None): #or version == None or release == None):
+                return -1
+            else:
+                if(version==int(global_settings.version)):
+                    if(int(global_settings.release) < release):
+                        return 0
+                    elif(int(global_settings.release) == release):
+                        return 1
+                    else:
+                        return -1
+                else:
+                    return -1
+        except:
+            return -1
+                

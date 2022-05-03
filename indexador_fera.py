@@ -333,9 +333,9 @@ class App():
                                                                                        document_margin.md, 0, \
                                                                                        relpathpdf, pathpdf_new, global_settings.infoLaudo[pathpdf_old].tipo)   
                                 global_settings.listaRELS[pathpdf_new] = relatorio_proxy
-                                
-                                del global_settings.infoLaudo[pathpdf_old]
-                                del global_settings.listaRELS[pathpdf_old]
+                                if(pathpdf_old!=pathpdf_new):
+                                    del global_settings.infoLaudo[pathpdf_old]
+                                    del global_settings.listaRELS[pathpdf_old]
                                 if pathpdf_old in global_settings.documents_to_index:
                                     global_settings.documents_to_index.remove(pathpdf_old)
                                 insert_query_toc = """INSERT INTO Anexo_Eletronico_Tocs
@@ -372,6 +372,8 @@ class App():
                                 updateinto2 = "UPDATE Anexo_Eletronico_SearchTerms set pesquisado = ? WHERE id_termo = ?"
                                 cursor.custom_execute(updateinto2, (pesquisados, id_termo))
                             sqliteconn.commit()
+                            global_settings.documents_to_index.append(pathpdf_new)
+                            print(global_settings.infoLaudo)
                             utilities_general.initiate_indexing_thread()
 
                             
@@ -890,6 +892,7 @@ def addrels(tipo, view=None, pathpdfinput = None, pathdbext=None, rootx=None, sq
                                 extrair_texto = utilities_general.extract_text_from_page(doc, pagina, deslocy, mmtopxtop, mmtopxbottom, mmtopxleft, mmtopxright)
                                 init = extrair_texto[0]
                                 novotexto = extrair_texto[1]
+                                
                                 listatocs.append((entrada[1], idpdf, pagina, deslocy, init,))
                             insert_query_toc = """INSERT INTO Anexo_Eletronico_Tocs
                                     (toc_unit, id_pdf , pagina, deslocy, init) VALUES

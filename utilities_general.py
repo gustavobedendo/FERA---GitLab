@@ -69,7 +69,6 @@ def extract_links_from_page(doc, idpdf, idobs, pathpdf, paginainit, paginafim, p
     links_tratados = []
     for p in range(paginainit, paginafim+1):
         if(paginainit!=paginafim and False):
-            #print('dif')
             if(p==paginainit):
                 p1y = global_settings.infoLaudo[pathpdf].mb
             elif(p==paginafim):
@@ -80,9 +79,7 @@ def extract_links_from_page(doc, idpdf, idobs, pathpdf, paginainit, paginafim, p
             if(p0y==p1y):
                 p0y -= 1
                 p1y += 1
-        #rint('2', p0x, p0y, p1x, p1y)
         loadedpage_links = doc[p].get_links()
-        #print(loadedpage_links)
         for link in loadedpage_links:
             #print(link)
             r = link['from']
@@ -346,10 +343,6 @@ def locateToc(pagina, pdf, p0y=None, init=None, tocpdf=None):
         tocc=[pdf,'','']
         if(len(tocpdf) > 0 and len(tocpdf[t])>0):
             tocc = tocpdf[t]
-        #print(tocc)
-        #else:
-        ##    print('teste')
-        #    tocc=[pdf,'','']
         return tocc
   
 def iterateXREF_Names(doc, xref, abs_path_pdf, pismm, aprocurar, rereference, rename_dest, regex):
@@ -523,9 +516,10 @@ def extract_text_from_page(doc, pagina, deslocy, topmargin, bottommargin, leftma
     for block in dictx['blocks']:
         if(block['type']==0):
             pontosBlock = block['bbox']
+            
             bloco = (math.floor(float(pontosBlock[0])), math.floor(float(pontosBlock[1])), \
                      math.ceil(float(pontosBlock[2])), math.floor(float(pontosBlock[3])), 'text')
-            if(pontosBlock[1]>deslocy):
+            if(pontosBlock[1]>deslocy and pontosBlock[3] > 0):
                 break 
             mapeamento[bloco] = {}
             for line in block['lines']:
@@ -690,6 +684,7 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                     devoltainit = slicebytesinit.decode('utf-8')
                     devoltadif = slicebytesdif.decode('utf-8')
                     ##busca simples
+                    toc = None
                     if(tocs_pdf==None):
                         toc = None
                     else:
@@ -815,6 +810,7 @@ def searchsqlite(tipobusca, termo, pathpdf, pathdb, idpdf, simplesearch = False,
                     qualcharfim = qualcharinit + len(termo)
                     
                     ##busca simples
+                    toc = None
                     if(tocs_pdf==None):
                         toc = None
                     else:

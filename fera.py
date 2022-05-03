@@ -3049,7 +3049,7 @@ class MainWindow():
             self.notebook.add(self.tocFrame, text="Relatorios", sticky='nsew', image=global_settings.repicon, compound='top')
             self.notebook.add(self.searchFrame, text="Buscas", sticky='nsew', image=global_settings.searchicon, compound='top')
             self.notebook.add(self.obsFrame, text="Marcadores", sticky='nsew', image=global_settings.commenticon, compound='top')
-            self.globalFrame.add(self.infoFrame, minsize=100)
+            self.globalFrame.add(self.infoFrame, minsize=400)
             self.treeviewObs.tag_configure('relobs', background='#e3e1e1')
             self.allobs = {}
             self.allobsbyitem = {}

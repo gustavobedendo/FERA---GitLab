@@ -218,7 +218,7 @@ class Ask_for_margins():
             else:
                 None
             global_settings.askformargins = not self.askformargins.get()
-            if(global_settings.askformargins):
+            if(self.askformargins):
                 global_settings.default_margin_top = topmargemmm
                 global_settings.default_margin_bottom = bottommargemmm
                 global_settings.default_margin_left = leftmargemmm
@@ -641,7 +641,7 @@ class Document_Margin():
         self.md = self.dataright.get()
         if(self.save_default_margins_var.get()):
             global_settings.default_margin_top = self.datatop.get()
-            global_settings.default_margin_bottom = self.datatbottom.get()
+            global_settings.default_margin_bottom = self.databottom.get()
             global_settings.default_margin_left = self.dataleft.get()
             global_settings.default_margin_right = self.dataright.get()
         self.window.destroy()

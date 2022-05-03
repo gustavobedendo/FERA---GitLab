@@ -37,7 +37,7 @@ def initiate_variables():
             
     
     global infoLaudo, pathpdfatual, version, root, minMaxLabels, exitFlag, divididoEm, realce, posicaoZoom, imagedontapply, imageapply
-    global continuar, listaRELS, listaTERMOS, queuesair, request_queue, request_queuexml, response_queue, response_queuexml, zoom
+    global continuar, listaRELS, listaTERMOS, queuesair, request_queue, request_queuexml, response_queue, response_queuexml, zoom, release, date_day, date_month, date_year
     global erros_queue, searchqueue, result_queue, update_queue, db_queue, regex_result_list, equipments, selectall, unselectall
     global warningimage, loadingimage, processing, showbookmarksi, imselect, imdrag, loading, imareaselect, filter_window_searches
     global imFP, imPP, imPP10, imNP, imNP10, imLP, printeri, im2, im, icon, p0x, p1x, p0y, p1y, contador_buscas_incr
@@ -83,7 +83,12 @@ def initiate_variables():
     p0y = None  
     p1y = None
     dbversion = "1.3"
-    version = 'v3.07-23032022'
+    version = "3"
+    release = "10"
+    date_day = "02"
+    date_month = "05"
+    date_year = "2022"
+    version = f'v{version}.{release}-{date_day}{date_month}{date_year}'
     env = None
     expertmode = True
     lockmanipulation = False

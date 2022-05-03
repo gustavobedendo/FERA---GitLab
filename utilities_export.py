@@ -220,7 +220,8 @@ class Export_Images_To_Table():
                 margemesq = (global_settings.infoLaudo[pathdocespecial].me/25.4)*72
                 margemdir = global_settings.infoLaudo[pathdocespecial].pixorgw-((global_settings.infoLaudo[pathdocespecial].md/25.4)*72)
                 size = 0.0666666667*intervalo-10, 450    
-                japegos = set()                
+                japegos = set()   
+                japegos2 = set()
                 for pagina in range(pinit2, pfim2+1):
                     p0x = max(p0xinit, margemesq)
                     if(pagina>pinit2):  
@@ -237,6 +238,10 @@ class Export_Images_To_Table():
                         r = link['from']
                         if('file' in link):
                             file = link['file']
+                            rect = fitz.Rect(r.x0-1, r.y0-5, r.x1, r.y1+5)
+                            file_on_pdf = docespecial[pagina].get_textbox(rect).strip()
+                            
+                            print(file, 'x', file_on_pdf, 'y', rect)
                             mediay = (r.y1 + r.y0) / 2.0    
                             if(p1y >= mediay and p0y <= mediay and (file, pathdocespecial) not in imagens):
                                 if("#" in file):
@@ -246,7 +251,9 @@ class Export_Images_To_Table():
                                 filepath = str(Path(utilities_general.get_normalized_path\
                                                     (os.path.join(Path(utilities_general.get_normalized_path(pathdocespecial)).parent,file))))  
                                 if(filepath in japegos):
-                                    continue
+                                    if(not (filepath, '') in japegos2):
+                                        continue
+                                japegos2.add((filepath, file_on_pdf))
                                 japegos.add(filepath)
                                 pngtohex = ""
                                 content = ""
